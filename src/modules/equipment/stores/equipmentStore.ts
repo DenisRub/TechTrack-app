@@ -16,6 +16,9 @@ const mockNodes: EquipmentNode[] = [
   { id: 2, name: 'Блок детектирования БДГ-01 №373', type: 'block', nodeTypeId: 1, parentId: 1, location: 'ПП №1', characteristics: {}, createdAt: '2024-01-01', updatedAt: '2024-01-01', isDeleted: false },
   { id: 3, name: 'Мобильный маршрутизатор iRZ RUH2b', type: 'block', nodeTypeId: 2, parentId: 1, location: 'ПП №1', characteristics: {}, createdAt: '2024-01-01', updatedAt: '2024-01-01', isDeleted: false },
   { id: 4, name: 'Блок питания резервный', type: 'block', nodeTypeId: 3, parentId: null, location: 'Склад', characteristics: {}, createdAt: '2024-01-01', updatedAt: '2024-01-01', isDeleted: false },
+  { id: 5, name: 'Дозиметр ДКС-01', type: 'block', nodeTypeId: null, parentId: null, location: 'Лаборатория №1', characteristics: {}, createdAt: '2024-01-01', updatedAt: '2024-01-01', isDeleted: false },
+  { id: 6, name: 'Радиометр РКС-02', type: 'block', nodeTypeId: null, parentId: null, location: 'Лаборатория №2', characteristics: {}, createdAt: '2024-01-01', updatedAt: '2024-01-01', isDeleted: false },
+  { id: 7, name: 'Спектрометр СКС-03', type: 'block', nodeTypeId: null, parentId: null, location: 'Лаборатория №3', characteristics: {}, createdAt: '2024-01-01', updatedAt: '2024-01-01', isDeleted: false },
 ];
 
 // Мок-данные – ресурсы

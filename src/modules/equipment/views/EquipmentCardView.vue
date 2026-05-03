@@ -168,14 +168,13 @@ function saveMove() {
   closeMoveModal();
 }
 
-// Переход к модулям (заглушки)
+// Переход к модулям
 function goToResources() {
-  alert('Модуль «Ресурсы» находится в разработке. Будет доступен позже.');
-  // TODO: router.push(`/resources?nodeId=${node.value.id}`);
+  router.push(`/resources?nodeId=${node.value.id}`);
 }
+
 function goToSI() {
-  alert('Модуль «СИ» пока не поддерживает фильтрацию по узлу. Функция будет добавлена.');
-  // TODO: router.push(`/si?nodeId=${node.value.id}`);
+  router.push(`/si?nodeId=${node.value.id}`);
 }
 
 onMounted(() => {

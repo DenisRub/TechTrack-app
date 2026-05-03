@@ -34,10 +34,24 @@ const mockResources: Resource[] = [
 
 // Мок-данные – параметры
 const mockParameters: ResourceParameter[] = [
+  // Существующие для ресурса 1 (Пост контроля)
   { id: 1, resourceId: 1, name: 'Емкость', value: 85, unit: '%', isMain: true },
   { id: 2, resourceId: 1, name: 'Напряжение', value: 12.2, unit: 'В', isMain: false },
   { id: 3, resourceId: 1, name: 'Внутреннее сопротивление', value: 0.022, unit: 'Ом', isMain: false },
   { id: 4, resourceId: 1, name: 'Остаточный срок службы', value: 3.5, unit: 'лет', isMain: true },
+  
+  // ДОБАВЛЯЕМ ДЛЯ РЕСУРСА 2 (Блок детектирования, nodeId: 2)
+  { id: 5, resourceId: 2, name: 'Чувствительность', value: 95, unit: '%', isMain: true },
+  { id: 6, resourceId: 2, name: 'Остаточный срок службы', value: 2.5, unit: 'лет', isMain: true },
+  { id: 7, resourceId: 2, name: 'Срок до ТО', value: 0.8, unit: 'лет', isMain: true },
+  
+  // ДЛЯ РЕСУРСА 3 (Дозиметр, nodeId: 5)
+  { id: 8, resourceId: 3, name: 'Остаточный ресурс', value: 0.5, unit: 'лет', isMain: true },
+  { id: 9, resourceId: 3, name: 'Погрешность', value: 5, unit: '%', isMain: false },
+  
+  // ДЛЯ РЕСУРСА 4 (Радиометр, nodeId: 6)
+  { id: 10, resourceId: 4, name: 'Эффективность', value: 98, unit: '%', isMain: true },
+  { id: 11, resourceId: 4, name: 'Остаточный срок службы', value: 1.2, unit: 'лет', isMain: true },
 ];
 
 export const useResourcesStore = defineStore('resources', () => {
