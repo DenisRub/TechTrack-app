@@ -17,7 +17,7 @@ export interface MaintenanceTask {
   nodeLocation?: string;     // Местоположение
   recommendedDate: string;   // Рекомендуемая дата ТО
   serviceType: 'плановое ТО' | 'внеплановое ТО' | 'капитальный ремонт' | 'аварийный ремонт';
-  status: 'pending' | 'in_progress' | 'completed';
+  status: 'pending' | 'in_progress' | 'completed' | 'not_completed';
   completedDate?: string;
   notes?: string;
 }

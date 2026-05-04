@@ -304,30 +304,59 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
 
   // Генерация задач для плана
   function generateTasksForPlan(planId: number, startDateStr: string, endDateStr: string): Omit<MaintenanceTask, 'id'>[] {
-    const equipmentStore = useEquipmentStore();
-    const resourcesStore = useResourcesStore();
-    const siStore = useSIStore();
+  const equipmentStore = useEquipmentStore();
+  const resourcesStore = useResourcesStore();
+  const siStore = useSIStore();
+  
+  const tasksList: Omit<MaintenanceTask, 'id'>[] = [];
+  const start = new Date(startDateStr);
+  const end = new Date(endDateStr);
+  
+  console.log('=== Генерация плана ТО ===');
+  console.log('Период:', startDateStr, '-', endDateStr);
+  
+  // Получаем ВСЕ блоки (не агрегаты)
+  const allBlocks = equipmentStore.nodes.filter((n: any) => !n.isDeleted && n.type === 'block');
+  console.log('Всего блоков:', allBlocks.length);
+  
+  for (const block of allBlocks) {
+    console.log(`\n--- Обработка блока: ${block.name} (ID: ${block.id}) ---`);
     
-    const tasksList: Omit<MaintenanceTask, 'id'>[] = [];
-    const start = new Date(startDateStr);
-    const end = new Date(endDateStr);
+    // Получаем дату истечения срока ТО
+    const expiryDate = getExpiryDate(block.id);
+    console.log(`  Дата истечения срока ТО: ${expiryDate || 'не определена'}`);
     
-    console.log('=== Генерация плана ТО ===');
-    console.log('Период:', startDateStr, '-', endDateStr);
-    
-    // Получаем ВСЕ блоки (не агрегаты)
-    const allBlocks = equipmentStore.nodes.filter((n: any) => !n.isDeleted && n.type === 'block');
-    console.log('Всего блоков:', allBlocks.length);
-    
-    for (const block of allBlocks) {
-      console.log(`\n--- Обработка блока: ${block.name} (ID: ${block.id}) ---`);
+    // Если дата истечения определена
+    if (expiryDate) {
+      const expiryDateObj = new Date(expiryDate);
       
-      // Получаем дату истечения срока ТО
-      const expiryDate = getExpiryDate(block.id);
-      console.log(`  Дата истечения срока ТО: ${expiryDate || 'не определена'}`);
-      
-      // Рассчитываем рекомендуемую дату проведения ТО (на 10 дней раньше)
-      const recommendedFromExpiry = getRecommendedFromExpiry(expiryDate);
+      // Проверяем, попадает ли дата истечения в диапазон плана
+      if (expiryDateObj >= start && expiryDateObj <= end) {
+        console.log(`  ✅ ВКЛЮЧЁН: дата истечения ${expiryDate} в диапазоне плана`);
+        
+        // Рассчитываем рекомендуемую дату проведения ТО (на 10 дней раньше)
+        const recommendedFromExpiry = getRecommendedFromExpiry(expiryDate);
+        
+        // Определяем тип обслуживания
+        let serviceType: MaintenanceTask['serviceType'] = 'плановое ТО';
+        let notes = `⏰ Срок ТО истекает ${formatDate(expiryDateObj)}`;
+        
+        tasksList.push({
+          planId,
+          nodeId: block.id,
+          nodeName: block.name,
+          nodeLocation: block.location || '',
+          recommendedDate: recommendedFromExpiry || expiryDate,
+          serviceType,
+          status: 'pending',
+          notes: notes,
+        });
+      } else {
+        console.log(`  ❌ НЕ ВКЛЮЧЁН: дата истечения ${expiryDate} вне диапазона плана`);
+      }
+    } else {
+      // Если дата истечения не определена, проверяем другие критерии
+      console.log(`  Дата истечения не определена, проверяем другие критерии...`);
       
       // Проверяем ресурсы узла
       let timeToService: number | null = null;
@@ -365,7 +394,6 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
       const siList = siStore.instruments.filter((si: any) => si.nodeId === block.id);
       if (siList.length > 0 && siList[0]) {
         nextVerificationDate = siList[0].nextVerificationDate;
-        console.log(`  Найдено СИ, следующая поверка: ${nextVerificationDate}`);
       }
       
       // Проверяем историю ТО
@@ -378,48 +406,43 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
         )[0];
         if (lastTask) {
           lastServiceDate = lastTask.completedDate || lastTask.recommendedDate;
-          console.log(`  Последнее ТО: ${lastServiceDate}`);
         }
       }
       
       // Определяем, нужно ли включать блок в план
       let shouldInclude = false;
-      let recommendedDate: string | null = recommendedFromExpiry;
+      let recommendedDate: string | null = null;
       let serviceType: MaintenanceTask['serviceType'] = 'плановое ТО';
       let notes: string = '';
       
-      if (expiryDate) {
-        const expiryDateObj = new Date(expiryDate);
-        const today = new Date();
-        const daysToExpiry = (expiryDateObj.getTime() - today.getTime()) / (1000 * 3600 * 24);
-        
-        if (daysToExpiry <= 365) {
-          shouldInclude = true;
-          recommendedDate = recommendedFromExpiry;
-          serviceType = determineServiceType({ timeToService, remainingLife, nextVerificationDate });
-          notes = `⏰ Срок ТО истекает ${formatDate(expiryDateObj)}`;
-          console.log(`  ВКЛЮЧЁН по дате истечения срока ТО (${Math.floor(daysToExpiry)} дней)`);
-        }
-      } else if (timeToService !== null && timeToService < 2) {
+      if (timeToService !== null && timeToService < 2) {
         shouldInclude = true;
         serviceType = timeToService < 0.5 ? 'капитальный ремонт' : 'плановое ТО';
         notes = `⚠️ Срок до ТО: ${timeToService} лет`;
-        console.log(`  ВКЛЮЧЁН по сроку до ТО (${timeToService} < 2)`);
+        // Рассчитываем примерную дату в пределах плана
+        const midDate = new Date(start);
+        midDate.setMonth(start.getMonth() + Math.floor((end.getMonth() - start.getMonth()) / 2));
+        recommendedDate = formatYMD(midDate);
       } else if (remainingLife !== null && remainingLife < 2) {
         shouldInclude = true;
         serviceType = remainingLife < 1 ? 'внеплановое ТО' : 'плановое ТО';
         notes = `📊 Остаточный ресурс: ${remainingLife} лет`;
-        console.log(`  ВКЛЮЧЁН по остаточному ресурсу (${remainingLife} < 2)`);
+        const midDate = new Date(start);
+        midDate.setMonth(start.getMonth() + Math.floor((end.getMonth() - start.getMonth()) / 2));
+        recommendedDate = formatYMD(midDate);
       } else if (nextVerificationDate) {
         const nextDate = new Date(nextVerificationDate);
-        const today = new Date();
-        const daysToVerification = (nextDate.getTime() - today.getTime()) / (1000 * 3600 * 24);
-        if (daysToVerification <= 180) {
+        if (nextDate >= start && nextDate <= end) {
           shouldInclude = true;
           recommendedDate = nextVerificationDate;
-          serviceType = daysToVerification <= 30 ? 'аварийный ремонт' : 'плановое ТО';
+          serviceType = 'плановое ТО';
           notes = `🔧 Следующая поверка СИ: ${nextVerificationDate}`;
-          console.log(`  ВКЛЮЧЁН по поверке СИ (через ${Math.floor(daysToVerification)} дней)`);
+        } else if (nextDate < start) {
+          // Если поверка была до начала плана, добавляем в начало периода
+          shouldInclude = true;
+          recommendedDate = startDateStr;
+          serviceType = 'плановое ТО';
+          notes = `🔧 Требуется поверка СИ (была ${nextVerificationDate})`;
         }
       } else if (lastServiceDate) {
         const lastDate = new Date(lastServiceDate);
@@ -428,41 +451,34 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
           shouldInclude = true;
           serviceType = yearsSince > 2.5 ? 'капитальный ремонт' : 'плановое ТО';
           notes = `🛠️ Последнее ТО: ${lastServiceDate} (прошло ${Math.floor(yearsSince)} лет)`;
-          console.log(`  ВКЛЮЧЁН по давности ТО (${Math.floor(yearsSince)} > 1.5 лет)`);
+          const midDate = new Date(start);
+          midDate.setMonth(start.getMonth() + Math.floor((end.getMonth() - start.getMonth()) / 2));
+          recommendedDate = formatYMD(midDate);
         }
-      } else if (resourceParams.length > 0 || resourceData !== undefined || siList.length > 0) {
-        shouldInclude = true;
-        serviceType = 'плановое ТО';
-        notes = 'Плановое техническое обслуживание';
-        console.log(`  ВКЛЮЧЁН по наличию ресурсов/СИ`);
       }
       
       if (shouldInclude && recommendedDate) {
-        const recDate = new Date(recommendedDate);
-        if (recDate >= start && recDate <= end) {
-          tasksList.push({
-            planId,
-            nodeId: block.id,
-            nodeName: block.name,
-            nodeLocation: block.location || '',
-            recommendedDate,
-            serviceType,
-            status: 'pending',
-            notes: notes,
-          });
-          console.log(`  ✅ ЗАДАЧА ДОБАВЛЕНА: ${block.name} на ${recommendedDate}`);
-        } else {
-          console.log(`  ⏭️ Дата ${recommendedDate} вне планового периода`);
-        }
+        tasksList.push({
+          planId,
+          nodeId: block.id,
+          nodeName: block.name,
+          nodeLocation: block.location || '',
+          recommendedDate,
+          serviceType,
+          status: 'pending',
+          notes: notes,
+        });
+        console.log(`  ✅ ЗАДАЧА ДОБАВЛЕНА: ${block.name} на ${recommendedDate}`);
       } else {
         console.log(`  ❌ НЕ ВКЛЮЧЁН`);
       }
     }
-    
-    tasksList.sort((a, b) => new Date(a.recommendedDate).getTime() - new Date(b.recommendedDate).getTime());
-    console.log(`\n=== ИТОГО ЗАДАЧ: ${tasksList.length} ===`);
-    return tasksList;
   }
+  
+  tasksList.sort((a, b) => new Date(a.recommendedDate).getTime() - new Date(b.recommendedDate).getTime());
+  console.log(`\n=== ИТОГО ЗАДАЧ: ${tasksList.length} ===`);
+  return tasksList;
+}
 
   // ========== CRUD Планы ==========
   function addPlan(plan: Omit<MaintenancePlan, 'id' | 'createdAt' | 'updatedAt' | 'isDeleted'>, autoGenerateTasks: boolean = false) {
@@ -499,9 +515,10 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
 
   // ========== CRUD Задачи ==========
   function addTask(task: Omit<MaintenanceTask, 'id'>) {
-    const newId = Math.max(...tasks.value.map(t => t.id), 0) + 1;
-    tasks.value.push({ ...task, id: newId });
-  }
+  const newId = Math.max(...tasks.value.map(t => t.id), 0) + 1;
+  tasks.value.push({ ...task, id: newId });
+  console.log('Задача добавлена в store:', tasks.value[tasks.value.length - 1]);
+}
 
   function updateTask(id: number, data: Partial<MaintenanceTask>) {
     const idx = tasks.value.findIndex(t => t.id === id);

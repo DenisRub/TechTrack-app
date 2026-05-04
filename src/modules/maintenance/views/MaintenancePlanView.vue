@@ -18,9 +18,9 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Поиск по оборудованию"
+          placeholder="Поиск по всем полям..."
           class="form-control"
-          style="width: 250px"
+          style="width: 300px"
           @input="applyFilters"
         />
         <select v-model="statusFilter" class="form-control" style="width: 150px" @change="applyFilters">
@@ -28,6 +28,7 @@
           <option value="pending">Ожидает</option>
           <option value="in_progress">В работе</option>
           <option value="completed">Выполнено</option>
+          <option value="not_completed">Не выполнено</option>
         </select>
         <select v-model="serviceTypeFilter" class="form-control" style="width: 180px" @change="applyFilters">
           <option value="">Все типы ТО</option>
@@ -40,7 +41,7 @@
       </div>
     </div>
 
-    <!-- Таблица задач -->
+        <!-- Таблица задач -->
     <table class="data-table">
       <thead>
         <tr>
@@ -87,12 +88,12 @@
           <td>{{ task.parentName || '-' }}</td>
           <td>
             {{ formatDate(task.expiryDate) }}
-            <span v-if="isExpiryNear(task.expiryDate)" class="warning-badge">Скоро!</span>
-            <span v-if="isExpiryOverdue(task.expiryDate)" class="danger-badge">Просрочено!</span>
+            <span v-if="isExpiryNear(task.expiryDate, task.status)" class="warning-badge">Скоро!</span>
+            <span v-if="isExpiryOverdue(task.expiryDate, task.status)" class="danger-badge">Просрочено!</span>
           </td>
           <td>
             {{ formatDate(task.recommendedDate) }}
-            <span v-if="isDateNear(task.recommendedDate)" class="warning-badge">Скоро!</span>
+            <span v-if="isDateNear(task.recommendedDate, task.status)" class="warning-badge">Скоро!</span>
           </td>
           <td>{{ task.serviceType }}</td>
           <td>{{ getStatusText(task.status) }}</td>
@@ -117,6 +118,7 @@
             <button class="dropdown-item" @click="exportTasksToWord">Word</button>
           </div>
         </div>
+        <button class="btn btn-secondary" @click="openChartModal">📊 График нагрузки</button>
         <button class="btn btn-primary" @click="openAddTaskForm">+ Добавить задачу</button>
       </div>
     </div>
@@ -148,6 +150,12 @@
 
     <MaintenanceTaskForm ref="taskFormRef" @saved="refresh" />
     <ConfirmDialog ref="confirmDialog" />
+    <!-- Модальное окно графика -->
+    <ChartModal 
+      ref="chartModalRef" 
+      :plan-name="plan?.name || ''" 
+      :plan-period="`${formatDate(plan?.startDate)} — ${formatDate(plan?.endDate)}`" 
+      :tasks="filteredAndSortedTasks" />
   </div>
   <div v-else class="card">Загрузка...</div>
 </template>
@@ -163,6 +171,7 @@ import MaintenanceTaskForm from '../components/MaintenanceTaskForm.vue';
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
 import * as exportUtils from '@/utils/exportUtils';
 import * as XLSX from 'xlsx';
+import ChartModal from '../components/ChartModal.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -188,6 +197,13 @@ const selectedTask = ref<any>(null);
 const newDate = ref('');
 const dateError = ref('');
 const dateWarning = ref('');
+
+const chartModalRef = ref();
+
+//для графика:
+function openChartModal() {
+  chartModalRef.value?.open();
+}
 
 // Форматирование даты YYYY-MM-DD
 function formatYMD(date: Date): string {
@@ -255,12 +271,15 @@ function getStatusText(status: string): string {
     pending: 'Ожидает',
     in_progress: 'В работе',
     completed: 'Выполнено',
+    not_completed: 'Не выполнено',
   };
   return statuses[status] || status;
 }
 
 // ========== Проверка дат ==========
-function isDateNear(dateStr: string): boolean {
+function isDateNear(dateStr: string, status: string): boolean {
+  // Если задача выполнена, не показываем предупреждение
+  if (status === 'completed') return false;
   if (!dateStr) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -270,11 +289,13 @@ function isDateNear(dateStr: string): boolean {
   return diff <= 30 && diff >= 0;
 }
 
-function isExpiryNear(dateStr: string): boolean {
-  return isDateNear(dateStr);
+function isExpiryNear(dateStr: string, status: string): boolean {
+  return isDateNear(dateStr, status);
 }
 
-function isExpiryOverdue(dateStr: string): boolean {
+function isExpiryOverdue(dateStr: string, status: string): boolean {
+  // Если задача выполнена, не показываем предупреждение
+  if (status === 'completed') return false;
   if (!dateStr) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -284,10 +305,12 @@ function isExpiryOverdue(dateStr: string): boolean {
 }
 
 function getRowClass(task: any): string {
-  if (task.expiryDate && isExpiryOverdue(task.expiryDate)) {
+  // Если задача выполнена, не подсвечиваем строку
+  if (task.status === 'completed') return '';
+  if (task.expiryDate && isExpiryOverdue(task.expiryDate, task.status)) {
     return 'overdue-row';
   }
-  if (task.expiryDate && isExpiryNear(task.expiryDate)) {
+  if (task.expiryDate && isExpiryNear(task.expiryDate, task.status)) {
     return 'warning-row';
   }
   return '';
@@ -388,17 +411,34 @@ function sortBy(field: string) {
 const filteredAndSortedTasks = computed(() => {
   let list = [...tasks.value];
 
+  // Глобальный поиск по всем полям
   if (searchQuery.value) {
-    const q = searchQuery.value.toLowerCase();
-    list = list.filter(t => t.nodeName.toLowerCase().includes(q));
+    const query = searchQuery.value.toLowerCase();
+    list = list.filter(t => {
+      // Проверяем все поля задачи
+      return (
+        (t.nodeName && t.nodeName.toLowerCase().includes(query)) ||
+        (t.parentName && t.parentName.toLowerCase().includes(query)) ||
+        (t.serviceType && t.serviceType.toLowerCase().includes(query)) ||
+        (t.status && getStatusText(t.status).toLowerCase().includes(query)) ||
+        (t.expiryDate && formatDate(t.expiryDate).toLowerCase().includes(query)) ||
+        (t.recommendedDate && formatDate(t.recommendedDate).toLowerCase().includes(query)) ||
+        (t.nodeLocation && t.nodeLocation.toLowerCase().includes(query))
+      );
+    });
   }
+  
+  // Фильтр по статусу
   if (statusFilter.value) {
     list = list.filter(t => t.status === statusFilter.value);
   }
+  
+  // Фильтр по типу обслуживания
   if (serviceTypeFilter.value) {
     list = list.filter(t => t.serviceType === serviceTypeFilter.value);
   }
 
+  // Сортировка
   list.sort((a, b) => {
     let valA = a[sortField.value];
     let valB = b[sortField.value];
@@ -430,6 +470,11 @@ function goToNode(nodeId: number) {
 }
 
 function openAddTaskForm() {
+  console.log('openAddTaskForm вызван');
+  if (!plan.value?.id) {
+    console.error('plan.id не найден');
+    return;
+  }
   taskFormRef.value?.open(plan.value.id);
 }
 
@@ -651,5 +696,9 @@ onUnmounted(() => {
   margin-left: 5px;
   font-size: 12px;
   color: #2c5f8a;
+}
+.status-not-completed {
+  color: #c0392b;
+  font-weight: 500;
 }
 </style>

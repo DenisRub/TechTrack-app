@@ -4,9 +4,9 @@
       <div class="modal-header">{{ isEdit ? 'Редактирование задачи' : 'Добавление задачи ТО' }}</div>
       
       <div class="form-group">
-        <label>Агрегат*</label>
-        <select v-model="form.nodeId" class="form-control">
-          <option :value="null">-- Выберите агрегат --</option>
+        <label>Оборудование*</label>
+        <select v-model="formData.nodeId" class="form-control">
+          <option :value="null">-- Выберите оборудование --</option>
           <option v-for="node in availableNodes" :key="node.id" :value="node.id">
             {{ node.name }} ({{ node.type === 'aggregate' ? 'Агрегат' : 'Блок' }})
           </option>
@@ -15,12 +15,12 @@
       
       <div class="form-group">
         <label>Рекомендуемая дата ТО*</label>
-        <input type="date" v-model="form.recommendedDate" class="form-control" />
+        <input type="date" v-model="formData.recommendedDate" class="form-control" />
       </div>
       
       <div class="form-group">
         <label>Тип обслуживания*</label>
-        <select v-model="form.serviceType" class="form-control">
+        <select v-model="formData.serviceType" class="form-control">
           <option value="плановое ТО">Плановое ТО</option>
           <option value="внеплановое ТО">Внеплановое ТО</option>
           <option value="капитальный ремонт">Капитальный ремонт</option>
@@ -30,16 +30,17 @@
       
       <div class="form-group">
         <label>Статус</label>
-        <select v-model="form.status" class="form-control">
+        <select v-model="formData.status" class="form-control">
           <option value="pending">Ожидает</option>
           <option value="in_progress">В работе</option>
           <option value="completed">Выполнено</option>
+          <option value="not_completed">Не выполнено</option>
         </select>
       </div>
       
       <div class="form-group">
         <label>Примечания</label>
-        <textarea v-model="form.notes" rows="2" class="form-control"></textarea>
+        <textarea v-model="formData.notes" rows="2" class="form-control"></textarea>
       </div>
       
       <div v-if="error" class="error-text">{{ error }}</div>
@@ -53,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive } from 'vue';
 import { useMaintenanceStore } from '../stores/maintenanceStore';
 import { useEquipmentStore } from '@/modules/equipment/stores/equipmentStore';
 
@@ -66,7 +67,8 @@ const planId = ref<number | null>(null);
 const error = ref('');
 const availableNodes = ref<any[]>([]);
 
-const form = reactive({
+// Форма с данными
+const formData = reactive({
   nodeId: null as number | null,
   recommendedDate: '',
   serviceType: 'плановое ТО' as const,
@@ -74,11 +76,23 @@ const form = reactive({
   notes: '',
 });
 
+// Функция для получения текущей даты в формате YYYY-MM-DD
+function getCurrentDate(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Загрузка доступного оборудования (только блоки, не агрегаты)
 function loadNodes() {
-  availableNodes.value = equipmentStore.nodes.filter((n: any) => !n.isDeleted && n.type === 'aggregate');
+  availableNodes.value = equipmentStore.nodes.filter((n: any) => !n.isDeleted && n.type === 'block');
+  console.log('Загружено оборудование для задачи:', availableNodes.value.length);
 }
 
 function open(pId: number, task?: any) {
+  console.log('open вызван, planId:', pId, 'task:', task);
   loadNodes();
   planId.value = pId;
   reset();
@@ -86,21 +100,22 @@ function open(pId: number, task?: any) {
   if (task) {
     isEdit.value = true;
     editId.value = task.id;
-    form.nodeId = task.nodeId;
-    form.recommendedDate = task.recommendedDate;
-    form.serviceType = task.serviceType;
-    form.status = task.status;
-    form.notes = task.notes || '';
+    formData.nodeId = task.nodeId;
+    formData.recommendedDate = task.recommendedDate;
+    formData.serviceType = task.serviceType;
+    formData.status = task.status;
+    formData.notes = task.notes || '';
+    console.log('Редактирование задачи:', task);
   }
   visible.value = true;
 }
 
 function reset() {
-  form.nodeId = null;
-  form.recommendedDate = new Date().toISOString().split('T')[0];
-  form.serviceType = 'плановое ТО';
-  form.status = 'pending';
-  form.notes = '';
+  formData.nodeId = null;
+  formData.recommendedDate = getCurrentDate();
+  formData.serviceType = 'плановое ТО';
+  formData.status = 'pending';
+  formData.notes = '';
   error.value = '';
   isEdit.value = false;
   editId.value = null;
@@ -111,27 +126,42 @@ function close() {
 }
 
 function save() {
-  if (!form.nodeId || !form.recommendedDate) {
-    error.value = 'Заполните обязательные поля';
+  console.log('save вызван, formData:', formData);
+  
+  if (!formData.nodeId) {
+    error.value = 'Выберите оборудование';
+    return;
+  }
+  if (!formData.recommendedDate) {
+    error.value = 'Укажите рекомендуемую дату ТО';
     return;
   }
   
-  const node = availableNodes.value.find(n => n.id === form.nodeId);
+  const node = availableNodes.value.find(n => n.id === formData.nodeId);
+  if (!node) {
+    error.value = 'Оборудование не найдено';
+    return;
+  }
+  
   const data = {
     planId: planId.value!,
-    nodeId: form.nodeId,
-    nodeName: node?.name || '',
-    nodeLocation: node?.location || '',
-    recommendedDate: form.recommendedDate,
-    serviceType: form.serviceType,
-    status: form.status,
-    notes: form.notes,
+    nodeId: formData.nodeId,
+    nodeName: node.name,
+    nodeLocation: node.location || '',
+    recommendedDate: formData.recommendedDate,
+    serviceType: formData.serviceType,
+    status: formData.status,
+    notes: formData.notes || '',
   };
+  
+  console.log('Сохраняемые данные:', data);
   
   if (isEdit.value && editId.value) {
     maintenanceStore.updateTask(editId.value, data);
+    console.log('Задача обновлена');
   } else {
     maintenanceStore.addTask(data);
+    console.log('Задача добавлена');
   }
   
   close();
