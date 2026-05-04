@@ -266,6 +266,10 @@ function save() {
   const registrationDate = form.registrationDate || getCurrentDate()
 
   const node = availableNodes.value.find((n) => n.id === form.nodeId)
+  
+  
+  
+  
   const data = {
     nodeId: form.nodeId,
     nodeName: node?.name || '',

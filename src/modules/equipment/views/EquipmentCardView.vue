@@ -1,16 +1,20 @@
 <template>
   <div class="card" v-if="node">
     <div style="display: flex; justify-content: space-between; margin-bottom: 20px">
-      <h2>{{ node.name }}</h2>
-      <div>
-        <button class="btn btn-secondary" @click="goBack">← Назад</button>
-        <button v-if="canEdit" class="btn btn-primary" @click="editNode">Редактировать</button>
-        <button v-if="canEdit" class="btn btn-danger" @click="deleteNode">Списать</button>
-        <button v-if="canEdit" class="btn btn-secondary" @click="openMoveModal">📦 Переместить</button>
-        <button class="btn btn-secondary" @click="goToResources">📊 Ресурсы</button>
-        <button class="btn btn-secondary" @click="goToSI">📏 СИ</button>
-      </div>
-    </div>
+  <h2>{{ node.name }}</h2>
+  <div>
+    <button class="btn btn-secondary" @click="goBack">← Назад</button>
+    <button v-if="canEdit" class="btn btn-primary" @click="editNode">Редактировать</button>
+    <button v-if="canEdit" class="btn btn-danger" @click="deleteNode">Списать</button>
+    <button v-if="canEdit" class="btn btn-secondary" @click="openMoveModal">📦 Переместить</button>
+  </div>
+</div>
+
+<!-- Блок быстрых переходов к связанным модулям -->
+<div class="quick-links">
+  <button class="btn btn-outline" @click="goToResources">📊 Ресурсы узла</button>
+  <button class="btn btn-outline" @click="goToSI">📏 Средства измерения</button>
+</div>
 
     <!-- Основные сведения -->
     <table style="width: 100%">
@@ -101,6 +105,7 @@ import AddChildModal from '../components/AddChildModal.vue';
 import ResourceList from '../components/ResourceList.vue';
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
 
+
 const route = useRoute();
 const router = useRouter();
 const store = useEquipmentStore();
@@ -187,4 +192,21 @@ onMounted(() => {
 <style scoped>
 pre { background: #f8f9fa; padding: 8px; border-radius: 4px; font-size: 12px; }
 .empty-message { color: #999; font-style: italic; padding: 10px; }
+
+.quick-links {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e0e4e8;
+}
+.btn-outline {
+  background: transparent;
+  border: 1px solid #2c5f8a;
+  color: #2c5f8a;
+}
+.btn-outline:hover {
+  background: #2c5f8a;
+  color: white;
+}
 </style>

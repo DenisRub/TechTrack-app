@@ -10,7 +10,9 @@
       </thead>
       <tbody>
         <tr v-for="res in resources" :key="res.id">
-          <td>{{ res.name }}</td><td>{{ res.value }}</td><td>{{ res.unit || '-' }}</td>
+          <td>{{ res.name }}</td>
+          <td>{{ res.value }}</td>
+          <td>{{ res.unit || '-' }}</td>
           <td>{{ res.updatedAt }}</td>
           <td>
             <button class="btn btn-sm btn-secondary" @click="editResource(res)">✏️</button>
@@ -21,7 +23,7 @@
     </table>
     <div v-else class="empty-message">Ресурсы не добавлены</div>
 
-    <!-- Модальное окно для ресурса (упрощённо) -->
+    <!-- Модальное окно для ресурса -->
     <div class="modal-overlay" v-if="showResourceForm">
       <div class="modal-content">
         <div class="modal-header">{{ isEdit ? 'Редактирование' : 'Добавление ресурса' }}</div>
@@ -39,12 +41,14 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { useEquipmentStore } from '../stores/equipmentStore';
+import { useResourcesStore } from '@/modules/resources/stores/resourcesStore'; // единый store
 
 const props = defineProps<{ nodeId: number }>();
-const store = useEquipmentStore();
+const store = useResourcesStore();
 
-const resources = computed(() => store.getResourcesForNode(props.nodeId));
+// Получаем ресурсы, привязанные к текущему узлу
+const resources = computed(() => store.resources.filter(r => r.nodeId === props.nodeId));
+
 const canEdit = computed(() => {
   const user = localStorage.getItem('user');
   if (!user) return false;
@@ -52,7 +56,6 @@ const canEdit = computed(() => {
   return role === 'operator' || role === 'admin';
 });
 
-// Состояние формы ресурса
 const showResourceForm = ref(false);
 const isEdit = ref(false);
 const editId = ref<number | null>(null);
@@ -75,17 +78,13 @@ async function deleteResource(id: number) {
 }
 function closeResourceForm() { showResourceForm.value = false; }
 function saveResource() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth()  + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const today = `${year}-${month}-${day}`;
+  const now = new Date().toISOString().split('T')[0]; // всегда строка
   const data = {
     nodeId: props.nodeId,
     name: resourceForm.value.name,
     value: resourceForm.value.value,
     unit: resourceForm.value.unit,
-    updatedAt: today,
+    registrationDate: now, // теперь точно string
   };
   if (isEdit.value && editId.value) {
     store.updateResource(editId.value, data);

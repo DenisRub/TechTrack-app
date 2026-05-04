@@ -11,18 +11,20 @@ export interface ResourceParameter {
 // Основной ресурс (аккумулятор, картридж и т.д.)
 export interface Resource {
   id: number;
-  nodeId: number;         // ID узла (к какому оборудованию относится)
-  nodeName?: string;      // Название узла для отображения
-  name: string;           // Наименование ресурса (Аккумуляторная батарея)
-  mark?: string;          // Марка (Восток 12-7)
-  type?: string;          // Тип (Гелевый)
-  productionDate?: string; // Дата производства
-  registrationDate: string; // Дата регистрации
-  registrationNumber?: number; // Учетный номер
-  serviceLife?: number;   // Срок службы (лет)
-  lastServiceDate?: string; // Дата последнего ТО
-  timeToService?: number; // Срок до ТО (лет)
-  notes?: string;         // Примечания
+  nodeId: number;
+  nodeName?: string;
+  name: string;
+  value?: string | number;   // добавим
+  unit?: string;             // добавим
+  mark?: string;
+  type?: string;
+  productionDate?: string;
+registrationDate?: string;
+  registrationNumber?: number;
+  serviceLife?: number;
+  lastServiceDate?: string;
+  timeToService?: number;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
   isDeleted: boolean;
