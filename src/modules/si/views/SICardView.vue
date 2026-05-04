@@ -22,8 +22,8 @@
       <h3>Основные сведения</h3>
       <table style="width: 100%; border-collapse: collapse">
         <tr>
-          <td style="padding: 8px 0; width: 200px"><strong>Табульный номер</strong></td>
-          <td>{{ instrument.tabulNumber }}</td>
+          <td style="padding: 8px 0; width: 200px"><strong>Табельный номер</strong></td>
+          <td>{{ instrument.tabNumber }}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0"><strong>Наименование</strong></td>
@@ -189,7 +189,7 @@ async function writeOffSI() {
     'Списать средство измерения? После списания прибор будет выведен из эксплуатации.',
   )
   if (ok && instrument.value) {
-    store.writeOffInstrument(instrument.value.id)
+    store.deleteInstrument(instrument.value.id)
     router.push('/si')
   }
 }

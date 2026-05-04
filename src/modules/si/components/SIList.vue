@@ -15,7 +15,7 @@
       <input
         v-model="filters.search"
         type="text"
-        placeholder="Поиск по номеру/наименованию"
+        placeholder="Поиск по номеру/наименованию (2+ символа)"
         class="form-control"
         style="width: 250px"
         @input="onSearchInput"
@@ -40,6 +40,9 @@
         <option value="">Все поверители</option>
         <option value="Самарский ЦСМ">Самарский ЦСМ</option>
         <option value="Саратовский ЦСМ">Саратовский ЦСМ</option>
+        <option value="Московский ЦСМ">Московский ЦСМ</option>
+        <option value="Казанский ЦСМ">Казанский ЦСМ</option>
+        <option value="Поверочная лаборатория">Поверочная лаборатория</option>
       </select>
       <button class="btn btn-secondary" @click="resetFilters">Сбросить</button>
     </div>
@@ -48,8 +51,10 @@
     <table class="data-table">
       <thead>
         <tr>
-          <th @click="sort('tabulNumber')">№ п/п</th>
+          <th @click="sort('id')">№ п/п</th>
+          <th @click="sort('tabNumber')">Табельный номер</th>
           <th @click="sort('name')">Наименование</th>
+          <th @click="sort('type')">Тип</th>
           <th @click="sort('location')">Местоположение</th>
           <th @click="sort('lastVerificationDate')">Последняя поверка</th>
           <th @click="sort('nextVerificationDate')">Следующая поверка</th>
@@ -60,19 +65,19 @@
       </thead>
       <tbody>
         <tr
-          v-for="si in sortedAndPriorityList"
+          v-for="(si, index) in sortedList"
           :key="si.id"
           :class="getRowClass(si)"
           :title="getTooltip(si)"
         >
-          <td>{{ si.tabulNumber }}</td>
+          <td>{{ si.id }}</td>
+          <td>{{ si.tabNumber }}</td>
           <td>{{ si.name }}</td>
+          <td>{{ si.type || '-' }}</td>
           <td>{{ si.location }}</td>
           <td>{{ formatDate(si.lastVerificationDate) }}</td>
           <td>{{ formatDate(si.nextVerificationDate) }}</td>
-          <td :class="{ 'status-disabled': si.status === 'выведено' }">
-            {{ si.status }}
-          </td>
+          <td>{{ si.status }}</td>
           <td>{{ si.verifier || '-' }}</td>
           <td>
             <button class="btn btn-sm btn-secondary" @click="viewCard(si.id)">Просмотр</button>
@@ -93,8 +98,8 @@
             <span v-if="si.status === 'выведено'" class="badge-disabled">Списан</span>
           </td>
         </tr>
-        <tr v-if="sortedAndPriorityList.length === 0">
-          <td colspan="8" style="text-align: center">Нет данных</td>
+        <tr v-if="sortedList.length === 0">
+          <td colspan="10" style="text-align: center">Нет данных</td>
         </tr>
       </tbody>
     </table>
@@ -102,7 +107,7 @@
     <!-- Модальные окна -->
     <SIForm ref="siFormRef" @si-saved="refresh" />
     <VerificationForm ref="verFormRef" @verification-saved="refresh" />
-    <ExportDialog ref="exportDialogRef" :data="sortedAndPriorityList" />
+    <ExportDialog ref="exportDialogRef" :data="sortedList" />
     <ConfirmDialog ref="confirmDialog" />
   </div>
 </template>
@@ -121,31 +126,26 @@ import { formatDate, getDaysUntilVerification } from '@/utils/dateUtils'
 const router = useRouter()
 const store = useSIStore()
 
-type SortableKey = keyof Pick<
-  MeasuringInstrument,
-  | 'tabulNumber'
+// Тип для ключей сортировки (все поля кроме действий)
+type SortableKey =
+  | 'id'
+  | 'tabNumber'
   | 'name'
+  | 'type'
   | 'location'
   | 'lastVerificationDate'
   | 'nextVerificationDate'
   | 'status'
   | 'verifier'
->
 
 const siFormRef = ref<InstanceType<typeof SIForm>>()
 const verFormRef = ref<InstanceType<typeof VerificationForm>>()
 const exportDialogRef = ref<InstanceType<typeof ExportDialog>>()
 const confirmDialog = ref<InstanceType<typeof ConfirmDialog>>()
 
-const filters = ref<FilterParams>({
-  search: '',
-  status: '',
-  verifier: '',
-})
-
+const filters = ref<FilterParams>({ search: '', status: '', verifier: '' })
 let searchTimer: ReturnType<typeof setTimeout> | null = null
-
-const sortField = ref<SortableKey>('tabulNumber')
+const sortField = ref<SortableKey>('tabNumber')
 const sortDir = ref<'asc' | 'desc'>('asc')
 
 const canEdit = computed(() => {
@@ -154,6 +154,8 @@ const canEdit = computed(() => {
   const role = JSON.parse(user).role
   return role === 'operator' || role === 'admin'
 })
+
+// ========== Приоритетная сортировка ==========
 
 // Функция для получения количества дней до поверки
 function getDaysLeft(si: MeasuringInstrument): number {
@@ -164,20 +166,22 @@ function getDaysLeft(si: MeasuringInstrument): number {
 
 // Функция для определения приоритета сортировки
 function getPriority(si: MeasuringInstrument): number {
-  // Приоритет 0: критичные (менее 30 дней)
-  // Приоритет 1: нормальные (больше 30 дней)
-  // Приоритет 2: списанные
-  if (si.status === 'выведено') return 2
+  // Приоритет 0: просроченные (меньше 0 дней)
+  // Приоритет 1: менее 30 дней (жёлтые)
+  // Приоритет 2: нормальные (>30 дней)
+  // Приоритет 3: списанные
+  if (si.status === 'выведено') return 3
   const daysLeft = getDaysLeft(si)
-  if (daysLeft <= 30) return 0
-  return 1
+  if (daysLeft < 0) return 0 // просроченные (красные)
+  if (daysLeft <= 30) return 1 // предупреждение (жёлтые)
+  return 2 // нормальные
 }
 
-// Сортировка с приоритетами: критичные → нормальные → списанные
-const sortedAndPriorityList = computed(() => {
+// Сортировка с приоритетами + сортировка внутри групп
+const sortedList = computed(() => {
   let list = [...store.instruments]
 
-  // Сначала сортируем по приоритету
+  // Сначала сортируем по приоритету (группы)
   list.sort((a, b) => {
     const priorityA = getPriority(a)
     const priorityB = getPriority(b)
@@ -185,25 +189,21 @@ const sortedAndPriorityList = computed(() => {
       return priorityA - priorityB
     }
 
-    // Внутри одной группы сортируем по убыванию критичности (чем меньше дней, тем выше)
-    if (priorityA === 0) {
-      const daysA = getDaysLeft(a)
-      const daysB = getDaysLeft(b)
-      return daysA - daysB
-    }
-
-    // Для нормальных и списанных — по выбранному полю
+    // Внутри одной группы применяем сортировку по выбранному полю
     const field = sortField.value
     let valA = a[field]
     let valB = b[field]
 
+    // Обработка undefined/null
     if (valA === undefined || valA === null) valA = ''
     if (valB === undefined || valB === null) valB = ''
 
+    // Числовое сравнение
     if (typeof valA === 'number' && typeof valB === 'number') {
       return sortDir.value === 'asc' ? valA - valB : valB - valA
     }
 
+    // Строковое сравнение
     const strA = String(valA).toLowerCase()
     const strB = String(valB).toLowerCase()
     if (strA < strB) return sortDir.value === 'asc' ? -1 : 1
@@ -214,42 +214,7 @@ const sortedAndPriorityList = computed(() => {
   return list
 })
 
-// Функция для получения класса строки
-function getRowClass(si: MeasuringInstrument): string {
-  if (si.status === 'выведено') return 'disabled-row'
-  const daysLeft = getDaysLeft(si)
-  if (daysLeft <= 30 && daysLeft >= 0) return 'warning-row'
-  if (daysLeft < 0) return 'expired-row'
-  return ''
-}
-
-// Функция для получения всплывающей подсказки
-function getTooltip(si: MeasuringInstrument): string {
-  if (si.status === 'выведено') {
-    return 'Прибор списан, не используется'
-  }
-  const daysLeft = getDaysLeft(si)
-  if (daysLeft < 0) {
-    const overdueDays = Math.abs(daysLeft)
-    return `Поверка просрочена на ${overdueDays} ${getDaysWord(overdueDays)}! Необходимо срочно отправить на поверку!`
-  }
-  if (daysLeft <= 30) {
-    return `До окончания срока поверки осталось ${daysLeft} ${getDaysWord(daysLeft)}. Рекомендуется запланировать поверку.`
-  }
-  return `Следующая поверка через ${daysLeft} ${getDaysWord(daysLeft)}`
-}
-
-// Склонение слова "день"
-function getDaysWord(days: number): string {
-  const lastDigit = days % 10
-  const lastTwoDigits = days % 100
-  if (lastTwoDigits >= 11 && lastTwoDigits <= 19) return 'дней'
-  if (lastDigit === 1) return 'день'
-  if (lastDigit >= 2 && lastDigit <= 4) return 'дня'
-  return 'дней'
-}
-
-// Функция сортировки (используется для пользовательского клика)
+// Функция сортировки по клику на заголовок
 function sort(field: SortableKey) {
   if (sortField.value === field) {
     sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
@@ -259,7 +224,7 @@ function sort(field: SortableKey) {
   }
 }
 
-// Применение фильтров
+// ========== Фильтрация ==========
 function applyFilters() {
   store.setFilterParams({
     search: filters.value.search,
@@ -290,6 +255,41 @@ function resetFilters() {
   applyFilters()
 }
 
+// ========== Цветовые классы ==========
+function getRowClass(si: MeasuringInstrument): string {
+  if (si.status === 'выведено') return 'disabled-row'
+  const days = getDaysUntilVerification(si.nextVerificationDate)
+  if (days < 0) return 'expired-row'
+  if (days <= 30) return 'warning-row'
+  return ''
+}
+
+// ========== Всплывающие подсказки ==========
+function getDaysWord(days: number): string {
+  const lastDigit = days % 10
+  const lastTwoDigits = days % 100
+  if (lastTwoDigits >= 11 && lastTwoDigits <= 19) return 'дней'
+  if (lastDigit === 1) return 'день'
+  if (lastDigit >= 2 && lastDigit <= 4) return 'дня'
+  return 'дней'
+}
+
+function getTooltip(si: MeasuringInstrument): string {
+  if (si.status === 'выведено') {
+    return 'Прибор списан, не используется'
+  }
+  const days = getDaysUntilVerification(si.nextVerificationDate)
+  if (days < 0) {
+    const overdueDays = Math.abs(days)
+    return `Поверка просрочена на ${overdueDays} ${getDaysWord(overdueDays)}! Необходимо срочно отправить на поверку!`
+  }
+  if (days <= 30) {
+    return `До окончания срока поверки осталось ${days} ${getDaysWord(days)}. Рекомендуется запланировать поверку.`
+  }
+  return `Следующая поверка через ${days} ${getDaysWord(days)}`
+}
+
+// ========== Действия ==========
 function viewCard(id: number) {
   router.push(`/si/${id}`)
 }
@@ -308,7 +308,7 @@ async function writeOffSI(id: number) {
     'Вы уверены, что хотите списать это средство измерения?',
   )
   if (ok) {
-    store.writeOffInstrument(id)
+    store.deleteInstrument(id)
   }
 }
 
@@ -317,7 +317,7 @@ function refresh() {
 }
 
 function openExportDialog() {
-  exportDialogRef.value?.open(sortedAndPriorityList.value)
+  exportDialogRef.value?.open(sortedList.value)
 }
 
 onMounted(() => {
@@ -336,11 +336,6 @@ onMounted(() => {
   text-align: center;
 }
 
-.status-disabled {
-  color: #999;
-  font-style: italic;
-}
-
 .badge-disabled {
   display: inline-block;
   padding: 4px 8px;
@@ -354,7 +349,6 @@ onMounted(() => {
 .warning-row {
   background-color: #fff3e0;
 }
-
 .warning-row:hover {
   background-color: #ffe8c7;
 }
@@ -363,7 +357,6 @@ onMounted(() => {
 .expired-row {
   background-color: #ffe0e0;
 }
-
 .expired-row:hover {
   background-color: #ffd0d0;
 }
@@ -374,7 +367,6 @@ onMounted(() => {
   color: #999;
   opacity: 0.7;
 }
-
 .disabled-row:hover {
   background-color: #e8e8e8;
 }

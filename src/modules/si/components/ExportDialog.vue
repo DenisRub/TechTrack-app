@@ -28,6 +28,7 @@ let currentData: MeasuringInstrument[] = []
 const columns = [
   'tabulNumber',
   'name',
+  'type',
   'location',
   'lastVerificationDate',
   'nextVerificationDate',

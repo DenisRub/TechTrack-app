@@ -1,14 +1,20 @@
-import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
-import type { MeasuringInstrument, Verification, FilterParams } from '@/modules/si/types/siTypes';
-import { addYears } from '@/utils/dateUtils';
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import type {
+  MeasuringInstrument,
+  Verification,
+  FilterParams,
+  InstrumentStatus,
+} from '../types/siTypes'
+import { addYears } from '@/utils/dateUtils'
 
 // Мок-данные для демонстрации
 const mockInstruments: MeasuringInstrument[] = [
   {
     id: 1,
-    tabulNumber: 'ДКС-001',
-    name: 'Дозиметр-радиометр МКС-АТ1117М',
+    tabNumber: 'ДКС-001',
+    name: 'Дозиметр-радиометр',
+    type: 'Дозиметр-радиометр',
     verificationInterval: 1,
     lastVerificationDate: '2025-05-05',
     nextVerificationDate: addYears('2025-05-05', 1),
@@ -20,8 +26,9 @@ const mockInstruments: MeasuringInstrument[] = [
   },
   {
     id: 2,
-    tabulNumber: 'БДГ-045',
-    name: 'Блок детектирования БДГ-01',
+    tabNumber: 'БДГ-045',
+    name: 'Блок детектирования',
+    type: 'Блок детектирования',
     verificationInterval: 2,
     lastVerificationDate: '2025-06-10',
     nextVerificationDate: addYears('2025-06-10', 2),
@@ -33,8 +40,9 @@ const mockInstruments: MeasuringInstrument[] = [
   },
   {
     id: 3,
-    tabulNumber: 'РАД-112',
-    name: 'Радиометр РКС-01',
+    tabNumber: 'РАД-112',
+    name: 'Радиометр',
+    type: 'Радиометр',
     verificationInterval: 1,
     lastVerificationDate: '2023-12-01',
     nextVerificationDate: addYears('2023-12-01', 1),
@@ -46,8 +54,9 @@ const mockInstruments: MeasuringInstrument[] = [
   },
   {
     id: 4,
-    tabulNumber: 'СПЕ-001',
-    name: 'Спектрометр СКС-03',
+    tabNumber: 'СПЕ-001',
+    name: 'Спектрометр',
+    type: 'Спектрометр',
     verificationInterval: 1,
     lastVerificationDate: '2024-10-01',
     nextVerificationDate: addYears('2024-10-01', 1),
@@ -59,8 +68,9 @@ const mockInstruments: MeasuringInstrument[] = [
   },
   {
     id: 5,
-    tabulNumber: 'АКБ-001',
+    tabNumber: 'АКБ-001',
     name: 'Аккумуляторная батарея',
+    type: 'Аккумулятор',
     verificationInterval: 3,
     lastVerificationDate: '2024-01-15',
     nextVerificationDate: addYears('2024-01-15', 3),
@@ -70,7 +80,21 @@ const mockInstruments: MeasuringInstrument[] = [
     isDeleted: false,
     nodeId: 1,
   },
-];
+  {
+    id: 6,
+    tabNumber: 'РЕМ-001',
+    name: 'Прибор в ремонте',
+    type: 'Тестовый',
+    verificationInterval: 1,
+    lastVerificationDate: '2024-01-01',
+    nextVerificationDate: addYears('2024-01-01', 1),
+    status: 'в ремонте',
+    location: 'Ремонтная мастерская',
+    verifier: '',
+    isDeleted: false,
+    nodeId: 6,
+  },
+]
 
 const mockVerifications: Verification[] = [
   {
@@ -97,122 +121,123 @@ const mockVerifications: Verification[] = [
     verifier: 'Казанский ЦСМ',
     result: 'годен',
   },
-];
+]
 
 export const useSIStore = defineStore('si', () => {
-  const instruments = ref<MeasuringInstrument[]>([...mockInstruments]);
-  const verifications = ref<Verification[]>([...mockVerifications]);
-  const filterParams = ref<FilterParams>({});
-  const isLoading = ref(false);
+  const instruments = ref<MeasuringInstrument[]>([...mockInstruments])
+  const verifications = ref<Verification[]>([...mockVerifications])
+  const filterParams = ref<FilterParams>({})
+  const isLoading = ref(false)
 
   const filteredInstruments = computed(() => {
-    let list = instruments.value.filter((si) => !si.isDeleted);
-    const params = filterParams.value;
+    let list = instruments.value.filter((si) => !si.isDeleted)
+    const params = filterParams.value
     if (params.search) {
-      const s = params.search.toLowerCase();
+      const s = params.search.toLowerCase()
       list = list.filter(
-        (si) => si.tabulNumber.toLowerCase().includes(s) || si.name.toLowerCase().includes(s)
-      );
+        (si) => si.tabNumber.toLowerCase().includes(s) || si.name.toLowerCase().includes(s),
+      )
     }
     if (params.status) {
-      list = list.filter((si) => si.status === params.status);
+      list = list.filter((si) => si.status === params.status)
     }
     if (params.verifier) {
-      list = list.filter((si) => si.verifier === params.verifier);
+      list = list.filter((si) => si.verifier === params.verifier)
     }
     if (params.daysToVerification) {
-      const today = new Date();
+      const today = new Date()
       list = list.filter((si) => {
-        const nextDate = new Date(si.nextVerificationDate);
-        const diff = (nextDate.getTime() - today.getTime()) / (1000 * 3600 * 24);
-        return diff <= params.daysToVerification!;
-      });
+        const nextDate = new Date(si.nextVerificationDate)
+        const diff = (nextDate.getTime() - today.getTime()) / (1000 * 3600 * 24)
+        return diff <= params.daysToVerification!
+      })
     }
-    return list;
-  });
+    return list
+  })
 
   function getVerificationsForSI(siId: number): Verification[] {
-    return verifications.value.filter((v) => v.siId === siId).sort((a, b) => b.id - a.id);
+    return verifications.value.filter((v) => v.siId === siId).sort((a, b) => b.id - a.id)
   }
 
   function addInstrument(instrument: Omit<MeasuringInstrument, 'id' | 'nextVerificationDate'>) {
-    const newId = Math.max(...instruments.value.map((s) => s.id), 0) + 1;
-    const nextDate = addYears(instrument.lastVerificationDate, instrument.verificationInterval);
+    const newId = Math.max(...instruments.value.map((s) => s.id), 0) + 1
+    const nextDate = addYears(instrument.lastVerificationDate, instrument.verificationInterval)
     const newInstrument: MeasuringInstrument = {
       ...instrument,
       id: newId,
       nextVerificationDate: nextDate,
       isDeleted: false,
-    };
-    instruments.value.push(newInstrument);
+    }
+    instruments.value.push(newInstrument)
   }
 
   function updateInstrument(id: number, data: Partial<MeasuringInstrument>) {
-    const idx = instruments.value.findIndex((s) => s.id === id);
-    if (idx === -1) return;
-    const existing = instruments.value[idx];
-    if (!existing) return;
-    
+    const idx = instruments.value.findIndex((s) => s.id === id)
+    if (idx === -1) return
+    const existing = instruments.value[idx]
+    if (!existing) return
+
     const updated: MeasuringInstrument = {
       id: existing.id,
-      tabulNumber: data.tabulNumber ?? existing.tabulNumber,
+      tabNumber: data.tabNumber ?? existing.tabNumber,
       name: data.name ?? existing.name,
+      type: data.type ?? existing.type,
       verificationInterval: data.verificationInterval ?? existing.verificationInterval,
       lastVerificationDate: data.lastVerificationDate ?? existing.lastVerificationDate,
       nextVerificationDate: data.nextVerificationDate ?? existing.nextVerificationDate,
-      status: (data.status ?? existing.status) as any,
+      status: (data.status ?? existing.status) as InstrumentStatus,
       location: data.location ?? existing.location,
       verifier: data.verifier ?? existing.verifier,
       additionalData: data.additionalData ?? existing.additionalData,
       isDeleted: data.isDeleted ?? existing.isDeleted,
       nodeId: data.nodeId ?? existing.nodeId,
-    };
-    
-    if (data.lastVerificationDate && data.verificationInterval) {
-      updated.nextVerificationDate = addYears(data.lastVerificationDate, data.verificationInterval);
     }
-    
-    instruments.value[idx] = updated;
+
+    if (data.lastVerificationDate && data.verificationInterval) {
+      updated.nextVerificationDate = addYears(data.lastVerificationDate, data.verificationInterval)
+    }
+
+    instruments.value[idx] = updated
   }
 
   function deleteInstrument(id: number) {
-  const idx = instruments.value.findIndex((s) => s.id === id);
-  if (idx !== -1) {
-    const instrument = instruments.value[idx];
-    if (instrument) {
-      instrument.isDeleted = true;
+    const idx = instruments.value.findIndex((s) => s.id === id)
+    if (idx !== -1) {
+      const instrument = instruments.value[idx]
+      if (instrument) {
+        instrument.isDeleted = true
+      }
     }
   }
-}
 
   function addVerification(ver: Omit<Verification, 'id'>) {
-    const newId = Math.max(...verifications.value.map((v) => v.id), 0) + 1;
-    verifications.value.push({ ...ver, id: newId });
+    const newId = Math.max(...verifications.value.map((v) => v.id), 0) + 1
+    verifications.value.push({ ...ver, id: newId })
     if (ver.result === 'годен') {
-      const si = instruments.value.find((s) => s.id === ver.siId);
+      const si = instruments.value.find((s) => s.id === ver.siId)
       if (si) {
-        si.lastVerificationDate = ver.receiptDate;
-        si.nextVerificationDate = addYears(ver.receiptDate, si.verificationInterval);
-        si.verifier = ver.verifier;
+        si.lastVerificationDate = ver.receiptDate
+        si.nextVerificationDate = addYears(ver.receiptDate, si.verificationInterval)
+        si.verifier = ver.verifier
       }
     }
   }
 
   function updateVerification(id: number, data: Partial<Verification>) {
-    const idx = verifications.value.findIndex((v) => v.id === id);
-    if (idx === -1) return;
-    const existing = verifications.value[idx];
-    if (!existing) return;
-    verifications.value[idx] = { 
-      ...existing, 
+    const idx = verifications.value.findIndex((v) => v.id === id)
+    if (idx === -1) return
+    const existing = verifications.value[idx]
+    if (!existing) return
+    verifications.value[idx] = {
+      ...existing,
       ...data,
       id: existing.id,
-    };
+    }
   }
 
   function deleteVerification(id: number) {
-    const idx = verifications.value.findIndex((v) => v.id === id);
-    if (idx !== -1) verifications.value.splice(idx, 1);
+    const idx = verifications.value.findIndex((v) => v.id === id)
+    if (idx !== -1) verifications.value.splice(idx, 1)
   }
 
   return {
@@ -228,7 +253,7 @@ export const useSIStore = defineStore('si', () => {
     updateVerification,
     deleteVerification,
     setFilterParams: (params: FilterParams) => {
-      filterParams.value = params;
+      filterParams.value = params
     },
-  };
-});
+  }
+})

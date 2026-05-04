@@ -2,15 +2,14 @@
   <header class="app-header">
     <div class="logo">
       <img src="@/assets/logo.png" alt="Логотип НИИАР" class="logo-icon" />
-      <span class="logo-text">АО «ГНЦ НИИАР»</span>
+      <span class="logo-text">СКЦ НИИАР</span>
     </div>
     <nav class="nav-menu">
       <router-link to="/equipment">Оборудование</router-link>
-      <router-link to="/si">СИ</router-link>
+      <router-link to="/si">Средства измерений</router-link>
       <router-link to="/resources">Ресурсы</router-link>
       <router-link to="/maintenance">Обслуживание</router-link>
       <router-link to="/subsystems">Подсистемы</router-link>
-      <router-link to="/diagnostics">Диагностика</router-link>
     </nav>
     <div class="user-info">
       <span class="user-name">{{ userLogin }}</span>

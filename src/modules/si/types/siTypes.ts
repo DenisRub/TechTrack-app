@@ -1,33 +1,34 @@
-export type InstrumentStatus = 'в эксплуатации' | 'на поверке' | 'выведено';
+export type InstrumentStatus = 'в эксплуатации' | 'на поверке' | 'в ремонте' | 'выведено'
 
 export interface MeasuringInstrument {
-  id: number;
-  tabulNumber: string;
-  name: string;
-  verificationInterval: number;
-  lastVerificationDate: string;
-  nextVerificationDate: string;
-  status: InstrumentStatus;
-  location: string;
-  verifier?: string;
-  additionalData?: any;
-  isDeleted: boolean;
-  nodeId?: number;  // Связь с узлом оборудования
+  id: number
+  tabNumber: string
+  name: string
+  type?: string
+  verificationInterval: number
+  lastVerificationDate: string
+  nextVerificationDate: string
+  status: InstrumentStatus
+  location: string
+  verifier?: string
+  additionalData?: any
+  isDeleted: boolean
+  nodeId?: number
 }
 
 export interface Verification {
-  id: number;
-  siId: number;
-  transferDate: string;
-  receiptDate: string;
-  verifier: string;
-  result: 'годен' | 'не годен';
-  notes?: string;
+  id: number
+  siId: number
+  transferDate: string
+  receiptDate: string
+  verifier: string
+  result: 'годен' | 'не годен'
+  notes?: string
 }
 
 export interface FilterParams {
-  search?: string;
-  status?: InstrumentStatus | '';
-  verifier?: string;
-  daysToVerification?: number;
+  search?: string
+  status?: InstrumentStatus | ''
+  verifier?: string
+  daysToVerification?: number
 }
