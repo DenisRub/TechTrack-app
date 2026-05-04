@@ -11,13 +11,15 @@
       <div class="form-row">
         <div class="form-group">
           <label>Дата начала*</label>
-          <input type="date" v-model="form.startDate" class="form-control" />
+          <input type="date" v-model="form.startDate" class="form-control" :class="{ 'invalid-date': dateError }" @change="validateDates" />
         </div>
         <div class="form-group">
           <label>Дата окончания*</label>
-          <input type="date" v-model="form.endDate" class="form-control" />
+          <input type="date" v-model="form.endDate" class="form-control" :class="{ 'invalid-date': dateError }" @change="validateDates" />
         </div>
       </div>
+      
+      <div v-if="dateError" class="error-text">{{ dateError }}</div>
       
       <div class="form-group">
         <label>Описание</label>
@@ -36,14 +38,14 @@
       
       <div class="modal-footer">
         <button class="btn btn-secondary" @click="close">Отмена</button>
-        <button class="btn btn-primary" @click="save" :disabled="generating">Сохранить</button>
+        <button class="btn btn-primary" @click="save" :disabled="generating || !!dateError">Сохранить</button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, watch } from 'vue';
 import { useMaintenanceStore } from '../stores/maintenanceStore';
 
 const store = useMaintenanceStore();
@@ -53,12 +55,35 @@ const editId = ref<number | null>(null);
 const error = ref('');
 const autoMessage = ref('');
 const generating = ref(false);
+const dateError = ref('');
 
 const form = reactive({
   name: '',
   startDate: '',
   endDate: '',
   description: '',
+});
+
+// Валидация дат
+function validateDates() {
+  if (!form.startDate || !form.endDate) {
+    dateError.value = '';
+    return;
+  }
+  
+  const start = new Date(form.startDate);
+  const end = new Date(form.endDate);
+  
+  if (end < start) {
+    dateError.value = '❌ Дата окончания не может быть раньше даты начала!';
+  } else {
+    dateError.value = '';
+  }
+}
+
+// Следим за изменением дат
+watch([() => form.startDate, () => form.endDate], () => {
+  validateDates();
 });
 
 function open(plan?: any) {
@@ -80,6 +105,7 @@ function reset() {
   form.endDate = '';
   form.description = '';
   error.value = '';
+  dateError.value = '';
   autoMessage.value = '';
   generating.value = false;
   isEdit.value = false;
@@ -93,6 +119,14 @@ function close() {
 async function save() {
   if (!form.startDate || !form.endDate) {
     error.value = 'Укажите дату начала и окончания плана';
+    return;
+  }
+  
+  // Дополнительная проверка перед сохранением
+  const start = new Date(form.startDate);
+  const end = new Date(form.endDate);
+  if (end < start) {
+    dateError.value = 'Дата окончания не может быть раньше даты начала!';
     return;
   }
   
@@ -159,5 +193,14 @@ defineExpose({ open });
 .auto-message.success {
   background-color: #e8f5e9;
   color: #2e7d32;
+}
+.invalid-date {
+  border-color: #c0392b !important;
+  background-color: #ffe0e0;
+}
+.error-text {
+  color: #c0392b;
+  font-size: 12px;
+  margin-top: 4px;
 }
 </style>

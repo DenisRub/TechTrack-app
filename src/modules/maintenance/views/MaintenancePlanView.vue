@@ -18,7 +18,7 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Поиск по агрегату"
+          placeholder="Поиск по оборудованию"
           class="form-control"
           style="width: 250px"
           @input="applyFilters"
@@ -44,16 +44,21 @@
     <table class="data-table">
       <thead>
         <tr>
+          <th>№ п/п</th>
           <th @click="sortBy('nodeName')">
-            Агрегат
+            Наименование оборудования
             <span class="sort-icon" v-if="sortField === 'nodeName'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
           </th>
-          <th @click="sortBy('nodeLocation')">
+          <th @click="sortBy('parentName')">
             Местоположение
-            <span class="sort-icon" v-if="sortField === 'nodeLocation'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
+            <span class="sort-icon" v-if="sortField === 'parentName'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
+          </th>
+          <th @click="sortBy('expiryDate')">
+            Дата истечения срока ТО
+            <span class="sort-icon" v-if="sortField === 'expiryDate'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
           </th>
           <th @click="sortBy('recommendedDate')">
-            Дата проведенияТО
+            Дата проведения ТО
             <span class="sort-icon" v-if="sortField === 'recommendedDate'">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
           </th>
           <th @click="sortBy('serviceType')">
@@ -69,29 +74,35 @@
       </thead>
       <tbody>
         <tr
-          v-for="task in filteredAndSortedTasks"
+          v-for="(task, index) in filteredAndSortedTasks"
           :key="task.id"
           :class="getRowClass(task)"
         >
+          <td>{{ index + 1 }}</td>
           <td>
             <button class="link-btn" @click="goToNode(task.nodeId)">
               {{ task.nodeName }}
             </button>
           </td>
-          <td>{{ task.nodeLocation || '-' }}</td>
+          <td>{{ task.parentName || '-' }}</td>
+          <td>
+            {{ formatDate(task.expiryDate) }}
+            <span v-if="isExpiryNear(task.expiryDate)" class="warning-badge">Скоро!</span>
+            <span v-if="isExpiryOverdue(task.expiryDate)" class="danger-badge">Просрочено!</span>
+          </td>
           <td>
             {{ formatDate(task.recommendedDate) }}
             <span v-if="isDateNear(task.recommendedDate)" class="warning-badge">Скоро!</span>
-            <span v-if="task.recommendedDate !== task.originalRecommendedDate && isDateOverdue(task.recommendedDate, task.originalRecommendedDate)" class="danger-badge">Просрочено!</span>
           </td>
           <td>{{ task.serviceType }}</td>
           <td>{{ getStatusText(task.status) }}</td>
           <td>
             <button class="btn btn-sm btn-secondary" @click="openEditDateModal(task)">📅 Изменить дату</button>
+            <button class="btn btn-sm btn-danger" @click="deleteTask(task.id)">🗑️ Удалить</button>
           </td>
         </tr>
         <tr v-if="filteredAndSortedTasks.length === 0">
-          <td colspan="6">Нет данных</td>
+          <td colspan="8">Нет данных</td>
         </tr>
       </tbody>
     </table>
@@ -113,17 +124,17 @@
     <!-- Модальное окно изменения даты -->
     <div class="modal-overlay" v-if="showDateModal">
       <div class="modal-content" style="width: 450px;">
-        <div class="modal-header">Изменение даты ТО</div>
+        <div class="modal-header">Изменение даты проведения ТО</div>
         <div class="form-group">
-          <label>Агрегат</label>
+          <label>Оборудование</label>
           <input :value="selectedTask?.nodeName" disabled class="form-control" />
         </div>
         <div class="form-group">
-          <label>Текущая дата ТО</label>
-          <input :value="formatDate(selectedTask?.recommendedDate)" disabled class="form-control" />
+          <label>Дата истечения срока ТО</label>
+          <input :value="formatDate(selectedTask?.expiryDate)" disabled class="form-control" />
         </div>
         <div class="form-group">
-          <label>Новая дата ТО*</label>
+          <label>Новая дата</label>
           <input type="date" v-model="newDate" class="form-control" :class="{ 'invalid-date': dateError }" />
           <div v-if="dateError" class="error-text">{{ dateError }}</div>
           <div v-if="dateWarning" class="warning-text">{{ dateWarning }}</div>
@@ -145,13 +156,20 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useMaintenanceStore } from '../stores/maintenanceStore';
+import { useEquipmentStore } from '@/modules/equipment/stores/equipmentStore';
+import { useResourcesStore } from '@/modules/resources/stores/resourcesStore';
+import { useSIStore } from '@/modules/si/stores/siStore';
 import MaintenanceTaskForm from '../components/MaintenanceTaskForm.vue';
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
 import * as exportUtils from '@/utils/exportUtils';
+import * as XLSX from 'xlsx';
 
 const route = useRoute();
 const router = useRouter();
-const store = useMaintenanceStore();
+const maintenanceStore = useMaintenanceStore();
+const equipmentStore = useEquipmentStore();
+const resourcesStore = useResourcesStore();
+const siStore = useSIStore();
 const taskFormRef = ref();
 const confirmDialog = ref();
 
@@ -162,7 +180,7 @@ const statusFilter = ref('');
 const serviceTypeFilter = ref('');
 const exportDropdownOpen = ref(false);
 
-const sortField = ref<'nodeName' | 'nodeLocation' | 'recommendedDate' | 'serviceType' | 'status'>('recommendedDate');
+const sortField = ref<'nodeName' | 'parentName' | 'expiryDate' | 'recommendedDate' | 'serviceType' | 'status'>('recommendedDate');
 const sortOrder = ref<'asc' | 'desc'>('asc');
 
 const showDateModal = ref(false);
@@ -170,6 +188,60 @@ const selectedTask = ref<any>(null);
 const newDate = ref('');
 const dateError = ref('');
 const dateWarning = ref('');
+
+// Форматирование даты YYYY-MM-DD
+function formatYMD(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Получить родительский агрегат для узла
+function getParentName(nodeId: number): string {
+  const node = equipmentStore.nodes.find((n: any) => n.id === nodeId);
+  if (node && node.parentId) {
+    const parent = equipmentStore.nodes.find((n: any) => n.id === node.parentId);
+    return parent ? parent.name : '-';
+  }
+  return '-';
+}
+
+// Получить дату истечения срока ТО для узла (используя store)
+function getExpiryDateFromStore(nodeId: number): string | null {
+  return maintenanceStore.getExpiryDate(nodeId);
+}
+
+// Рассчитать рекомендуемую дату проведения ТО (на 10 дней раньше даты истечения)
+function getRecommendedDate(expiryDate: string | null): string | null {
+  if (!expiryDate) return null;
+  const date = new Date(expiryDate);
+  date.setDate(date.getDate() - 10);
+  return formatYMD(date);
+}
+
+// Загрузка данных с обогащением
+function loadData() {
+  const id = Number(route.params.id);
+  plan.value = maintenanceStore.allPlans?.find((p: any) => p.id === id);
+  if (plan.value) {
+    const rawTasks = maintenanceStore.getTasksForPlan(id);
+    tasks.value = rawTasks
+      .filter((t: any) => {
+        const node = equipmentStore.nodes.find((n: any) => n.id === t.nodeId);
+        return node && node.type === 'block' && !node.isDeleted;
+      })
+      .map((t: any) => {
+        const expiryDate = getExpiryDateFromStore(t.nodeId);
+        return {
+          ...t,
+          parentName: getParentName(t.nodeId),
+          expiryDate: expiryDate,
+          recommendedDate: t.recommendedDate || getRecommendedDate(expiryDate) || t.recommendedDate,
+        };
+      });
+  }
+}
 
 // ========== Форматирование ==========
 function formatDate(dateStr: string): string {
@@ -198,33 +270,31 @@ function isDateNear(dateStr: string): boolean {
   return diff <= 30 && diff >= 0;
 }
 
-function isDateOverdue(dateStr: string, recommendedDate: string): boolean {
-  if (!dateStr || !recommendedDate) return false;
-  const recommended = new Date(recommendedDate);
-  recommended.setHours(0, 0, 0, 0);
+function isExpiryNear(dateStr: string): boolean {
+  return isDateNear(dateStr);
+}
+
+function isExpiryOverdue(dateStr: string): boolean {
+  if (!dateStr) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const target = new Date(dateStr);
   target.setHours(0, 0, 0, 0);
-  const diff = (target.getTime() - recommended.getTime()) / (1000 * 3600 * 24);
-  return diff > 30;
+  return target < today;
 }
 
 function getRowClass(task: any): string {
-  if (!task.originalRecommendedDate) return isDateNear(task.recommendedDate) ? 'warning-row' : '';
-  
-  const isChanged = task.recommendedDate !== task.originalRecommendedDate;
-  const isOverdue = isDateOverdue(task.recommendedDate, task.originalRecommendedDate);
-  
-  if (isChanged && isOverdue) {
+  if (task.expiryDate && isExpiryOverdue(task.expiryDate)) {
     return 'overdue-row';
   }
-  if (isDateNear(task.recommendedDate)) {
+  if (task.expiryDate && isExpiryNear(task.expiryDate)) {
     return 'warning-row';
   }
   return '';
 }
 
 // ========== Валидация даты ==========
-function validateDate(newDateStr: string, oldRecommendedDate: string): boolean {
+function validateDate(newDateStr: string, expiryDateStr: string): boolean {
   dateError.value = '';
   dateWarning.value = '';
   
@@ -237,17 +307,17 @@ function validateDate(newDateStr: string, oldRecommendedDate: string): boolean {
   today.setHours(0, 0, 0, 0);
   const newDateObj = new Date(newDateStr);
   newDateObj.setHours(0, 0, 0, 0);
-  const recommendedDateObj = new Date(oldRecommendedDate);
-  recommendedDateObj.setHours(0, 0, 0, 0);
+  const expiryDateObj = new Date(expiryDateStr);
+  expiryDateObj.setHours(0, 0, 0, 0);
   
   if (newDateObj < today) {
-    dateError.value = 'Дата не может быть в прошлом! Выберите сегодняшнюю или будущую дату.';
+    dateError.value = 'Дата не может быть в прошлом!';
     return false;
   }
   
-  if (newDateObj > recommendedDateObj) {
-    const daysDiff = Math.ceil((newDateObj.getTime() - recommendedDateObj.getTime()) / (1000 * 3600 * 24));
-    dateWarning.value = `⚠️ Внимание! Вы устанавливаете дату ТО на ${daysDiff} дней позже рекомендованной (${formatDate(oldRecommendedDate)}). Рекомендуется провести ТО вовремя или раньше.`;
+  if (newDateObj > expiryDateObj) {
+    const daysDiff = Math.ceil((newDateObj.getTime() - expiryDateObj.getTime()) / (1000 * 3600 * 24));
+    dateWarning.value = `⚠️ Дата проведения ТО на ${daysDiff} дней позже даты истечения срока (${formatDate(expiryDateStr)}). Рекомендуется провести ТО раньше.`;
     return true;
   }
   
@@ -274,7 +344,7 @@ function closeDateModal() {
 function saveTaskDateWithValidation() {
   if (!selectedTask.value) return;
   
-  const isValid = validateDate(newDate.value, selectedTask.value.recommendedDate);
+  const isValid = validateDate(newDate.value, selectedTask.value.expiryDate);
   if (!isValid) return;
   
   if (dateWarning.value) {
@@ -282,10 +352,8 @@ function saveTaskDateWithValidation() {
     if (!confirm) return;
   }
   
-  // Сохраняем новую дату в store
-  store.updateTask(selectedTask.value.id, { recommendedDate: newDate.value });
+  maintenanceStore.updateTask(selectedTask.value.id, { recommendedDate: newDate.value });
   
-  // Обновляем локальный список задач
   const taskIndex = tasks.value.findIndex(t => t.id === selectedTask.value.id);
   if (taskIndex !== -1) {
     tasks.value[taskIndex] = {
@@ -295,6 +363,15 @@ function saveTaskDateWithValidation() {
   }
   
   closeDateModal();
+}
+
+// ========== Удаление задачи ==========
+async function deleteTask(taskId: number) {
+  const ok = await confirmDialog.value?.show('Удаление задачи', 'Вы уверены, что хотите удалить эту задачу из плана ТО?');
+  if (ok) {
+    maintenanceStore.deleteTask(taskId);
+    refresh();
+  }
 }
 
 // ========== Сортировка ==========
@@ -340,23 +417,10 @@ function resetFilters() {
   serviceTypeFilter.value = '';
 }
 
-// ========== Загрузка данных ==========
-function loadData() {
-  const id = Number(route.params.id);
-  plan.value = store.allPlans?.find((p: any) => p.id === id);
-  if (plan.value) {
-    tasks.value = store.getTasksForPlan(id).map((t: any) => ({
-      ...t,
-      originalRecommendedDate: t.recommendedDate
-    }));
-  }
-}
-
 function refresh() {
   loadData();
 }
 
-// ========== Навигация ==========
 function goBack() {
   router.back();
 }
@@ -371,10 +435,12 @@ function openAddTaskForm() {
 
 // ========== Экспорт ==========
 function getTasksExportData() {
-  return filteredAndSortedTasks.value.map(t => ({
-    'Агрегат': t.nodeName,
-    'Местоположение': t.nodeLocation || '-',
-    'Рекомендуемая дата ТО': formatDate(t.recommendedDate),
+  return filteredAndSortedTasks.value.map((t, idx) => ({
+    '№ п/п': idx + 1,
+    'Наименование оборудования': t.nodeName,
+    'Местоположение': t.parentName || '-',
+    'Дата истечения срока ТО': formatDate(t.expiryDate),
+    'Дата проведения ТО': formatDate(t.recommendedDate),
     'Тип обслуживания': t.serviceType,
     'Статус': getStatusText(t.status),
   }));
@@ -386,8 +452,48 @@ function exportTasksToExcel() {
     alert('Нет данных для экспорта');
     return;
   }
-  const filename = `${plan.value.name.replace(/\s/g, '_')}_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`;
-  exportUtils.exportToExcel(data, filename);
+  
+  // Создаём массив строк для Excel (массив массивов)
+  const excelRows = [];
+  
+  // 1. Строка с названием плана
+  excelRows.push([`${plan.value.name}`]);
+  
+  // 2. Пустая строка для отступа
+  excelRows.push([]);
+  
+  // 3. Заголовки таблицы
+  excelRows.push([
+    '№ п/п', 
+    'Наименование оборудования', 
+    'Местоположение', 
+    'Дата истечения срока ТО', 
+    'Дата проведения ТО', 
+    'Тип обслуживания', 
+    'Статус'
+  ]);
+  
+  // 4. Данные таблицы
+  data.forEach(row => {
+    excelRows.push([
+      row['№ п/п'],
+      row['Наименование оборудования'],
+      row['Местоположение'],
+      row['Дата истечения срока ТО'],
+      row['Дата проведения ТО'],
+      row['Тип обслуживания'],
+      row['Статус']
+    ]);
+  });
+  
+  // Создаём Excel файл
+  const ws = XLSX.utils.aoa_to_sheet(excelRows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'План ТО');
+  
+  const filename = `${plan.value.name.replace(/\s/g, '_')}.xlsx`;
+  XLSX.writeFile(wb, filename);
+  
   exportDropdownOpen.value = false;
 }
 
@@ -400,7 +506,7 @@ function exportTasksToWord() {
   const firstItem = data[0];
   if (!firstItem) return;
   const headers = Object.keys(firstItem);
-  const filename = `${plan.value.name.replace(/\s/g, '_')}_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`;
+  const filename = `${plan.value.name.replace(/\s/g, '_')}`;
   exportUtils.exportToWord(data, headers, filename);
   exportDropdownOpen.value = false;
 }
@@ -416,7 +522,6 @@ function handleClickOutside(event: MouseEvent) {
   }
 }
 
-// ========== Жизненный цикл ==========
 onMounted(() => {
   loadData();
   document.addEventListener('click', handleClickOutside);
@@ -497,7 +602,8 @@ onUnmounted(() => {
   border: none;
   color: #2c5f8a;
   cursor: pointer;
-  text-decoration: underline;
+  font-size: 15px;
+  text-align: left;
 }
 .link-btn:hover {
   color: #1e4566;

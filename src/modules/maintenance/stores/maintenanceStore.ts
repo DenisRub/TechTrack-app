@@ -97,6 +97,68 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
 
   // ========== Функции для автоматического расчёта ==========
 
+  // Форматирование даты в строку YYYY-MM-DD
+  function formatYMD(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  // Получить дату истечения срока ТО для узла
+  function getExpiryDate(nodeId: number): string | null {
+    const equipmentStore = useEquipmentStore();
+    const resourcesStore = useResourcesStore();
+    const siStore = useSIStore();
+    
+    let lastDate: Date | null = null;
+    let maxInterval = 0;
+
+    // 1. Проверяем СИ
+    const siList = siStore.instruments.filter((si: any) => si.nodeId === nodeId);
+    for (const si of siList) {
+      if (si.lastVerificationDate) {
+        const date = new Date(si.lastVerificationDate);
+        if (!lastDate || date > lastDate) lastDate = date;
+        maxInterval = Math.max(maxInterval, si.verificationInterval);
+      }
+    }
+
+    // 2. Проверяем ресурсы
+    const resources = resourcesStore.resources.filter((r: any) => r.nodeId === nodeId);
+    for (const res of resources) {
+      if (res.lastServiceDate) {
+        const date = new Date(res.lastServiceDate);
+        if (!lastDate || date > lastDate) lastDate = date;
+      }
+      if (res.timeToService && res.timeToService > maxInterval) {
+        maxInterval = res.timeToService;
+      }
+    }
+
+    // 3. Проверяем оборудование
+    const node = equipmentStore.nodes.find((n: any) => n.id === nodeId);
+    if (node && node.updatedAt) {
+      const date = new Date(node.updatedAt);
+      if (!lastDate || date > lastDate) lastDate = date;
+    }
+
+    if (lastDate && maxInterval > 0) {
+      const expiryDate = new Date(lastDate);
+      expiryDate.setFullYear(expiryDate.getFullYear() + maxInterval);
+      return formatYMD(expiryDate);
+    }
+    return null;
+  }
+
+  // Получить рекомендуемую дату проведения ТО (на 10 дней раньше даты истечения)
+  function getRecommendedFromExpiry(expiryDate: string | null): string | null {
+    if (!expiryDate) return null;
+    const date = new Date(expiryDate);
+    date.setDate(date.getDate() - 10);
+    return formatYMD(date);
+  }
+
   // Определение типа обслуживания
   function determineServiceType(factors: {
     timeToService: number | null;
@@ -241,167 +303,166 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
   }
 
   // Генерация задач для плана
- function generateTasksForPlan(planId: number, startDateStr: string, endDateStr: string): Omit<MaintenanceTask, 'id'>[] {
-  const equipmentStore = useEquipmentStore();
-  const resourcesStore = useResourcesStore();
-  const siStore = useSIStore();
-  
-  const tasksList: Omit<MaintenanceTask, 'id'>[] = [];
-  const start = new Date(startDateStr);
-  const end = new Date(endDateStr);
-  
-  console.log('=== Генерация плана ТО ===');
-  console.log('Период:', startDateStr, '-', endDateStr);
-  
-  // Получаем ВСЕ узлы
-  const allNodes = equipmentStore.nodes.filter((n: any) => !n.isDeleted);
-  console.log('Всего узлов:', allNodes.length);
-  
-  for (const node of allNodes) {
-    console.log(`\n--- Обработка узла: ${node.name} (ID: ${node.id}, тип: ${node.type}) ---`);
+  function generateTasksForPlan(planId: number, startDateStr: string, endDateStr: string): Omit<MaintenanceTask, 'id'>[] {
+    const equipmentStore = useEquipmentStore();
+    const resourcesStore = useResourcesStore();
+    const siStore = useSIStore();
     
-    // ========== A. ПРОВЕРКА РЕСУРСОВ ==========
-    let timeToService: number | null = null;
-    let remainingLife: number | null = null;
+    const tasksList: Omit<MaintenanceTask, 'id'>[] = [];
+    const start = new Date(startDateStr);
+    const end = new Date(endDateStr);
     
-    // Проверяем ресурсы узла
-    const resourceData = resourcesStore.resources.find((r: any) => r.nodeId === node.id);
-    if (resourceData) {
-      console.log(`  Найден ресурс: ${resourceData.name}`);
-      if (resourceData.timeToService !== undefined && resourceData.timeToService !== null) {
-        timeToService = resourceData.timeToService;
-        console.log(`    Срок до ТО: ${timeToService} лет`);
-      }
-      if (resourceData.serviceLife !== undefined && resourceData.serviceLife !== null) {
-        remainingLife = resourceData.serviceLife;
-        console.log(`    Срок службы: ${remainingLife} лет`);
-      }
-    }
+    console.log('=== Генерация плана ТО ===');
+    console.log('Период:', startDateStr, '-', endDateStr);
     
-    // Проверяем параметры ресурса
-    const resourceParams = resourcesStore.getParametersForResource(node.id);
-    for (const param of resourceParams) {
-      let paramValue = '';
-      if (param.value !== undefined && param.value !== null) {
-        paramValue = String(param.value);
-      }
-      const parsed = parseFloat(paramValue);
-      if (!isNaN(parsed)) {
-        if (param.name === 'Срок до ТО' || param.name === 'timeToService') {
-          timeToService = parsed;
-          console.log(`    Срок до ТО из параметров: ${parsed} лет`);
+    // Получаем ВСЕ блоки (не агрегаты)
+    const allBlocks = equipmentStore.nodes.filter((n: any) => !n.isDeleted && n.type === 'block');
+    console.log('Всего блоков:', allBlocks.length);
+    
+    for (const block of allBlocks) {
+      console.log(`\n--- Обработка блока: ${block.name} (ID: ${block.id}) ---`);
+      
+      // Получаем дату истечения срока ТО
+      const expiryDate = getExpiryDate(block.id);
+      console.log(`  Дата истечения срока ТО: ${expiryDate || 'не определена'}`);
+      
+      // Рассчитываем рекомендуемую дату проведения ТО (на 10 дней раньше)
+      const recommendedFromExpiry = getRecommendedFromExpiry(expiryDate);
+      
+      // Проверяем ресурсы узла
+      let timeToService: number | null = null;
+      let remainingLife: number | null = null;
+      
+      const resourceData = resourcesStore.resources.find((r: any) => r.nodeId === block.id);
+      if (resourceData) {
+        if (resourceData.timeToService !== undefined && resourceData.timeToService !== null) {
+          timeToService = resourceData.timeToService;
         }
-        if (param.name === 'Остаточный ресурс' || param.name === 'remainingLife' || param.name === 'Остаточный срок службы') {
-          remainingLife = parsed;
-          console.log(`    Остаточный ресурс из параметров: ${parsed} лет`);
+        if (resourceData.serviceLife !== undefined && resourceData.serviceLife !== null) {
+          remainingLife = resourceData.serviceLife;
         }
       }
-    }
-    
-    // ========== B. ПРОВЕРКА СИ ==========
-    let nextVerificationDate: string | null = null;
-    const siList = siStore.instruments.filter((si: any) => si.nodeId === node.id);
-    if (siList.length > 0 && siList[0]) {
-      nextVerificationDate = siList[0].nextVerificationDate;
-      console.log(`  Найдено СИ, следующая поверка: ${nextVerificationDate}`);
-    }
-    
-    // ========== C. ИСТОРИЯ ТО ==========
-    let lastServiceDate: string | null = null;
-    const existingTasks = tasksHistory.value.filter(t => t.nodeId === node.id);
-    const completedTasks = existingTasks.filter(t => t.status === 'completed');
-    if (completedTasks.length > 0) {
-      const lastTask = completedTasks.sort((a, b) => 
-        new Date(b.completedDate || b.recommendedDate).getTime() - new Date(a.completedDate || a.recommendedDate).getTime()
-      )[0];
-      if (lastTask) {
-        lastServiceDate = lastTask.completedDate || lastTask.recommendedDate;
-        console.log(`  Последнее ТО: ${lastServiceDate}`);
+      
+      const resourceParams = resourcesStore.getParametersForResource(block.id);
+      for (const param of resourceParams) {
+        let paramValue = '';
+        if (param.value !== undefined && param.value !== null) {
+          paramValue = String(param.value);
+        }
+        const parsed = parseFloat(paramValue);
+        if (!isNaN(parsed)) {
+          if (param.name === 'Срок до ТО' || param.name === 'timeToService') {
+            timeToService = parsed;
+          }
+          if (param.name === 'Остаточный ресурс' || param.name === 'remainingLife' || param.name === 'Остаточный срок службы') {
+            remainingLife = parsed;
+          }
+        }
       }
-    }
-    
-    // ========== D. ОПРЕДЕЛЯЕМ, НУЖНО ЛИ ВКЛЮЧАТЬ ==========
-    let shouldInclude = false;
-    let recommendedDate: string | null = null;
-    let serviceType: MaintenanceTask['serviceType'] = 'плановое ТО';
-    let notes: string = '';
-    
-    // Приоритет 1: Срок до ТО из ресурсов
-    if (timeToService !== null && timeToService < 2) {
-      shouldInclude = true;
-      recommendedDate = calculateRecommendedDate(start, end, { timeToService, remainingLife, nextVerificationDate, lastServiceDate });
-      serviceType = timeToService < 0.5 ? 'капитальный ремонт' : 'плановое ТО';
-      notes = `⚠️ Срок до ТО: ${timeToService} лет`;
-      console.log(`  ВКЛЮЧЁН по сроку до ТО (${timeToService} < 2)`);
-    }
-    // Приоритет 2: Остаточный ресурс
-    else if (remainingLife !== null && remainingLife < 2) {
-      shouldInclude = true;
-      recommendedDate = calculateRecommendedDate(start, end, { timeToService, remainingLife, nextVerificationDate, lastServiceDate });
-      serviceType = remainingLife < 1 ? 'внеплановое ТО' : 'плановое ТО';
-      notes = `📊 Остаточный ресурс: ${remainingLife} лет`;
-      console.log(`  ВКЛЮЧЁН по остаточному ресурсу (${remainingLife} < 2)`);
-    }
-    // Приоритет 3: Поверка СИ
-    else if (nextVerificationDate) {
-      const nextDate = new Date(nextVerificationDate);
-      const today = new Date();
-      const daysToVerification = (nextDate.getTime() - today.getTime()) / (1000 * 3600 * 24);
-      if (daysToVerification <= 180) {
+      
+      // Проверяем СИ
+      let nextVerificationDate: string | null = null;
+      const siList = siStore.instruments.filter((si: any) => si.nodeId === block.id);
+      if (siList.length > 0 && siList[0]) {
+        nextVerificationDate = siList[0].nextVerificationDate;
+        console.log(`  Найдено СИ, следующая поверка: ${nextVerificationDate}`);
+      }
+      
+      // Проверяем историю ТО
+      let lastServiceDate: string | null = null;
+      const existingTasks = tasksHistory.value.filter(t => t.nodeId === block.id);
+      const completedTasks = existingTasks.filter(t => t.status === 'completed');
+      if (completedTasks.length > 0) {
+        const lastTask = completedTasks.sort((a, b) => 
+          new Date(b.completedDate || b.recommendedDate).getTime() - new Date(a.completedDate || a.recommendedDate).getTime()
+        )[0];
+        if (lastTask) {
+          lastServiceDate = lastTask.completedDate || lastTask.recommendedDate;
+          console.log(`  Последнее ТО: ${lastServiceDate}`);
+        }
+      }
+      
+      // Определяем, нужно ли включать блок в план
+      let shouldInclude = false;
+      let recommendedDate: string | null = recommendedFromExpiry;
+      let serviceType: MaintenanceTask['serviceType'] = 'плановое ТО';
+      let notes: string = '';
+      
+      if (expiryDate) {
+        const expiryDateObj = new Date(expiryDate);
+        const today = new Date();
+        const daysToExpiry = (expiryDateObj.getTime() - today.getTime()) / (1000 * 3600 * 24);
+        
+        if (daysToExpiry <= 365) {
+          shouldInclude = true;
+          recommendedDate = recommendedFromExpiry;
+          serviceType = determineServiceType({ timeToService, remainingLife, nextVerificationDate });
+          notes = `⏰ Срок ТО истекает ${formatDate(expiryDateObj)}`;
+          console.log(`  ВКЛЮЧЁН по дате истечения срока ТО (${Math.floor(daysToExpiry)} дней)`);
+        }
+      } else if (timeToService !== null && timeToService < 2) {
         shouldInclude = true;
-        recommendedDate = nextVerificationDate;
-        serviceType = daysToVerification <= 30 ? 'аварийный ремонт' : 'плановое ТО';
-        notes = `🔧 Следующая поверка СИ: ${nextVerificationDate}`;
-        console.log(`  ВКЛЮЧЁН по поверке СИ (через ${Math.floor(daysToVerification)} дней)`);
-      }
-    }
-    // Приоритет 4: Давно не было ТО
-    else if (lastServiceDate) {
-      const lastDate = new Date(lastServiceDate);
-      const yearsSince = (new Date().getTime() - lastDate.getTime()) / (1000 * 3600 * 24 * 365);
-      if (yearsSince > 1.5) {
+        serviceType = timeToService < 0.5 ? 'капитальный ремонт' : 'плановое ТО';
+        notes = `⚠️ Срок до ТО: ${timeToService} лет`;
+        console.log(`  ВКЛЮЧЁН по сроку до ТО (${timeToService} < 2)`);
+      } else if (remainingLife !== null && remainingLife < 2) {
         shouldInclude = true;
-        recommendedDate = calculateRecommendedDate(start, end, { timeToService, remainingLife, nextVerificationDate, lastServiceDate });
-        serviceType = yearsSince > 2.5 ? 'капитальный ремонт' : 'плановое ТО';
-        notes = `🛠️ Последнее ТО: ${lastServiceDate} (прошло ${Math.floor(yearsSince)} лет)`;
-        console.log(`  ВКЛЮЧЁН по давности ТО (${Math.floor(yearsSince)} > 1.5 лет)`);
+        serviceType = remainingLife < 1 ? 'внеплановое ТО' : 'плановое ТО';
+        notes = `📊 Остаточный ресурс: ${remainingLife} лет`;
+        console.log(`  ВКЛЮЧЁН по остаточному ресурсу (${remainingLife} < 2)`);
+      } else if (nextVerificationDate) {
+        const nextDate = new Date(nextVerificationDate);
+        const today = new Date();
+        const daysToVerification = (nextDate.getTime() - today.getTime()) / (1000 * 3600 * 24);
+        if (daysToVerification <= 180) {
+          shouldInclude = true;
+          recommendedDate = nextVerificationDate;
+          serviceType = daysToVerification <= 30 ? 'аварийный ремонт' : 'плановое ТО';
+          notes = `🔧 Следующая поверка СИ: ${nextVerificationDate}`;
+          console.log(`  ВКЛЮЧЁН по поверке СИ (через ${Math.floor(daysToVerification)} дней)`);
+        }
+      } else if (lastServiceDate) {
+        const lastDate = new Date(lastServiceDate);
+        const yearsSince = (new Date().getTime() - lastDate.getTime()) / (1000 * 3600 * 24 * 365);
+        if (yearsSince > 1.5) {
+          shouldInclude = true;
+          serviceType = yearsSince > 2.5 ? 'капитальный ремонт' : 'плановое ТО';
+          notes = `🛠️ Последнее ТО: ${lastServiceDate} (прошло ${Math.floor(yearsSince)} лет)`;
+          console.log(`  ВКЛЮЧЁН по давности ТО (${Math.floor(yearsSince)} > 1.5 лет)`);
+        }
+      } else if (resourceParams.length > 0 || resourceData !== undefined || siList.length > 0) {
+        shouldInclude = true;
+        serviceType = 'плановое ТО';
+        notes = 'Плановое техническое обслуживание';
+        console.log(`  ВКЛЮЧЁН по наличию ресурсов/СИ`);
       }
-    }
-    // Приоритет 5: Базовое обслуживание
-    else if (resourceParams.length > 0 || resourceData !== undefined || siList.length > 0) {
-      shouldInclude = true;
-      recommendedDate = calculateRecommendedDate(start, end, { timeToService, remainingLife, nextVerificationDate, lastServiceDate });
-      serviceType = 'плановое ТО';
-      notes = 'Плановое техническое обслуживание';
-      console.log(`  ВКЛЮЧЁН по наличию ресурсов/СИ`);
-    }
-    
-    if (shouldInclude && recommendedDate) {
-      const recDate = new Date(recommendedDate);
-      if (recDate >= start && recDate <= end) {
-        tasksList.push({
-          planId,
-          nodeId: node.id,
-          nodeName: node.name,
-          nodeLocation: node.location || '',
-          recommendedDate,
-          serviceType,
-          status: 'pending',
-          notes: notes,
-        });
-        console.log(`  ✅ ЗАДАЧА ДОБАВЛЕНА: ${node.name} на ${recommendedDate}`);
+      
+      if (shouldInclude && recommendedDate) {
+        const recDate = new Date(recommendedDate);
+        if (recDate >= start && recDate <= end) {
+          tasksList.push({
+            planId,
+            nodeId: block.id,
+            nodeName: block.name,
+            nodeLocation: block.location || '',
+            recommendedDate,
+            serviceType,
+            status: 'pending',
+            notes: notes,
+          });
+          console.log(`  ✅ ЗАДАЧА ДОБАВЛЕНА: ${block.name} на ${recommendedDate}`);
+        } else {
+          console.log(`  ⏭️ Дата ${recommendedDate} вне планового периода`);
+        }
       } else {
-        console.log(`  ⏭️ Дата ${recommendedDate} вне планового периода`);
+        console.log(`  ❌ НЕ ВКЛЮЧЁН`);
       }
-    } else {
-      console.log(`  ❌ НЕ ВКЛЮЧЁН`);
     }
+    
+    tasksList.sort((a, b) => new Date(a.recommendedDate).getTime() - new Date(b.recommendedDate).getTime());
+    console.log(`\n=== ИТОГО ЗАДАЧ: ${tasksList.length} ===`);
+    return tasksList;
   }
-  
-  tasksList.sort((a, b) => new Date(a.recommendedDate).getTime() - new Date(b.recommendedDate).getTime());
-  console.log(`\n=== ИТОГО ЗАДАЧ: ${tasksList.length} ===`);
-  return tasksList;
-}
 
   // ========== CRUD Планы ==========
   function addPlan(plan: Omit<MaintenancePlan, 'id' | 'createdAt' | 'updatedAt' | 'isDeleted'>, autoGenerateTasks: boolean = false) {
@@ -475,5 +536,7 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
     // Методы автоматического расчёта
     generateAutoPlan,
     generateTasksForPlan,
+    getExpiryDate,
+    getRecommendedFromExpiry,
   };
 });
