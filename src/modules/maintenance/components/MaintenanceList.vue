@@ -44,32 +44,34 @@
       </div>
     </div>
 
-    <!-- Таблица планов-графиков -->
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th @click="sortBy('name')">Название плана</th>
-          <th @click="sortBy('startDate')">Дата начала</th>
-          <th @click="sortBy('endDate')">Дата окончания</th>
-          <th>Действия</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="plan in filteredAndSortedPlans" :key="plan.id">
-          <td>{{ plan.name }}</td>
-          <td>{{ formatDate(plan.startDate) }}</td>
-          <td>{{ formatDate(plan.endDate) }}</td>
-          <td>
-            <button class="btn btn-sm btn-secondary" @click="viewPlan(plan.id)">Открыть</button>
-            <button class="btn btn-sm btn-secondary" @click="editPlan(plan)">✏️</button>
-            <button class="btn btn-sm btn-danger" @click="deletePlan(plan.id)">🗑️</button>
-          </td>
-        </tr>
-        <tr v-if="filteredAndSortedPlans.length === 0">
-          <td colspan="4">Нет данных</td>
-        </table>
-      </tbody>
-    </table>
+    <!-- ОБЁРТКА ДЛЯ ТАБЛИЦЫ -->
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th @click="sortBy('name')">Название плана</th>
+            <th @click="sortBy('startDate')">Дата начала</th>
+            <th @click="sortBy('endDate')">Дата окончания</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="plan in filteredAndSortedPlans" :key="plan.id">
+            <td>{{ plan.name }}</td>
+            <td>{{ formatDate(plan.startDate) }}</td>
+            <td>{{ formatDate(plan.endDate) }}</td>
+            <td>
+              <button class="btn btn-sm btn-secondary" @click="viewPlan(plan.id)">Открыть</button>
+              <button class="btn btn-sm btn-secondary" @click="editPlan(plan)">✏️</button>
+              <button class="btn btn-sm btn-danger" @click="deletePlan(plan.id)">🗑️</button>
+            </td>
+          </tr>
+          <tr v-if="filteredAndSortedPlans.length === 0">
+            <td colspan="4">Нет данных</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <!-- Модальные окна -->
     <MaintenanceForm ref="formRef" @saved="refresh" />
@@ -78,97 +80,97 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useRouter } from 'vue-router';
-import { useMaintenanceStore } from '../stores/maintenanceStore';
-import MaintenanceForm from './MaintenanceForm.vue';
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
-import * as exportUtils from '@/utils/exportUtils';
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useMaintenanceStore } from '../stores/maintenanceStore'
+import MaintenanceForm from './MaintenanceForm.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import * as exportUtils from '@/utils/exportUtils'
 
-const router = useRouter();
-const store = useMaintenanceStore();
-const formRef = ref();
-const confirmDialog = ref();
+const router = useRouter()
+const store = useMaintenanceStore()
+const formRef = ref()
+const confirmDialog = ref()
 
 // Фильтры
-const searchQuery = ref('');
-const dateFrom = ref('');
-const dateTo = ref('');
-const dropdownOpen = ref(false);
+const searchQuery = ref('')
+const dateFrom = ref('')
+const dateTo = ref('')
+const dropdownOpen = ref(false)
 
 // Сортировка
-const sortField = ref<'name' | 'startDate' | 'endDate'>('startDate');
-const sortOrder = ref<'asc' | 'desc'>('asc');
+const sortField = ref<'name' | 'startDate' | 'endDate'>('startDate')
+const sortOrder = ref<'asc' | 'desc'>('asc')
 
 function formatDate(dateStr: string): string {
-  if (!dateStr) return '';
-  const parts = dateStr.split('-');
-  return `${parts[2]}.${parts[1]}.${parts[0]}`;
+  if (!dateStr) return ''
+  const parts = dateStr.split('-')
+  return `${parts[2]}.${parts[1]}.${parts[0]}`
 }
 
 function sortBy(field: 'name' | 'startDate' | 'endDate') {
   if (sortField.value === field) {
-    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
   } else {
-    sortField.value = field;
-    sortOrder.value = 'asc';
+    sortField.value = field
+    sortOrder.value = 'asc'
   }
 }
 
 const filteredAndSortedPlans = computed(() => {
-  let list = [...store.plans];
+  let list = [...store.plans]
 
   // Фильтрация по названию
   if (searchQuery.value) {
-    const q = searchQuery.value.toLowerCase();
-    list = list.filter(p => p.name.toLowerCase().includes(q));
+    const q = searchQuery.value.toLowerCase()
+    list = list.filter((p) => p.name.toLowerCase().includes(q))
   }
 
   // Фильтрация по диапазону дат
   if (dateFrom.value) {
-    list = list.filter(p => p.startDate >= dateFrom.value);
+    list = list.filter((p) => p.startDate >= dateFrom.value)
   }
   if (dateTo.value) {
-    list = list.filter(p => p.startDate <= dateTo.value);
+    list = list.filter((p) => p.startDate <= dateTo.value)
   }
 
   // Сортировка
   list.sort((a, b) => {
-    let valA = a[sortField.value];
-    let valB = b[sortField.value];
-    if (valA < valB) return sortOrder.value === 'asc' ? -1 : 1;
-    if (valA > valB) return sortOrder.value === 'asc' ? 1 : -1;
-    return 0;
-  });
+    let valA = a[sortField.value]
+    let valB = b[sortField.value]
+    if (valA < valB) return sortOrder.value === 'asc' ? -1 : 1
+    if (valA > valB) return sortOrder.value === 'asc' ? 1 : -1
+    return 0
+  })
 
-  return list;
-});
+  return list
+})
 
 function applyFilters() {
   // computed обновляется автоматически
 }
 
 function resetFilters() {
-  searchQuery.value = '';
-  dateFrom.value = '';
-  dateTo.value = '';
+  searchQuery.value = ''
+  dateFrom.value = ''
+  dateTo.value = ''
 }
 
 function viewPlan(id: number) {
-  router.push(`/maintenance/${id}`);
+  router.push(`/maintenance/${id}`)
 }
 
 function openAddForm() {
-  formRef.value?.open();
+  formRef.value?.open()
 }
 
 function editPlan(plan: any) {
-  formRef.value?.open(plan);
+  formRef.value?.open(plan)
 }
 
 async function deletePlan(id: number) {
-  const ok = await confirmDialog.value?.show('Удаление', 'Удалить план-график?');
-  if (ok) store.deletePlan(id);
+  const ok = await confirmDialog.value?.show('Удаление', 'Удалить план-график?')
+  if (ok) store.deletePlan(id)
 }
 
 function refresh() {
@@ -177,56 +179,56 @@ function refresh() {
 
 // Экспорт
 function getExportData() {
-  return filteredAndSortedPlans.value.map(p => ({
+  return filteredAndSortedPlans.value.map((p) => ({
     'Название плана': p.name,
     'Дата начала': formatDate(p.startDate),
     'Дата окончания': formatDate(p.endDate),
-  }));
+  }))
 }
 
 function exportToExcel() {
-  const data = getExportData();
+  const data = getExportData()
   if (data.length === 0) {
-    alert('Нет данных для экспорта');
-    return;
+    alert('Нет данных для экспорта')
+    return
   }
-  const filename = `Планы_ТО_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`;
-  exportUtils.exportToExcel(data, filename);
-  dropdownOpen.value = false;
+  const filename = `Планы_ТО_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`
+  exportUtils.exportToExcel(data, filename)
+  dropdownOpen.value = false
 }
 
 function exportToWord() {
-  const data = getExportData();
+  const data = getExportData()
   if (data.length === 0) {
-    alert('Нет данных для экспорта');
-    return;
+    alert('Нет данных для экспорта')
+    return
   }
-  const firstItem = data[0];
-  if (!firstItem) return;
-  const headers = Object.keys(firstItem);
-  const filename = `Планы_ТО_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`;
-  exportUtils.exportToWord(data, headers, filename);
-  dropdownOpen.value = false;
+  const firstItem = data[0]
+  if (!firstItem) return
+  const headers = Object.keys(firstItem)
+  const filename = `Планы_ТО_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`
+  exportUtils.exportToWord(data, headers, filename)
+  dropdownOpen.value = false
 }
 
 function toggleDropdown() {
-  dropdownOpen.value = !dropdownOpen.value;
+  dropdownOpen.value = !dropdownOpen.value
 }
 
 function handleClickOutside(event: MouseEvent) {
-  const target = event.target as HTMLElement;
+  const target = event.target as HTMLElement
   if (!target.closest('.dropdown')) {
-    dropdownOpen.value = false;
+    dropdownOpen.value = false
   }
 }
 
 onMounted(() => {
-  document.addEventListener('click', handleClickOutside);
-});
+  document.addEventListener('click', handleClickOutside)
+})
 
 onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside);
-});
+  document.removeEventListener('click', handleClickOutside)
+})
 </script>
 
 <style scoped>
@@ -246,7 +248,7 @@ onUnmounted(() => {
   background: white;
   border: 1px solid #e0e4e8;
   border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   z-index: 100;
   min-width: 220px;
 }

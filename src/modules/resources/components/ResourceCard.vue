@@ -27,7 +27,9 @@
         <div class="info-label">Узел</div>
         <div class="info-value">{{ resource.nodeName || `ID: ${resource.nodeId}` }}</div>
         <div class="info-label">Срок службы</div>
-        <div class="info-value">{{ resource.serviceLife ? resource.serviceLife + ' лет' : '-' }}</div>
+        <div class="info-value">
+          {{ resource.serviceLife ? resource.serviceLife + ' лет' : '-' }}
+        </div>
       </div>
       <div class="info-row">
         <div class="info-label">Дата регистрации</div>
@@ -39,38 +41,42 @@
         <div class="info-label">Дата ТО</div>
         <div class="info-value">{{ resource.lastServiceDate || '-' }}</div>
         <div class="info-label">Срок до ТО</div>
-        <div class="info-value">{{ resource.timeToService ? resource.timeToService + ' лет' : '-' }}</div>
+        <div class="info-value">
+          {{ resource.timeToService ? resource.timeToService + ' лет' : '-' }}
+        </div>
       </div>
     </div>
 
-    <!-- Таблица параметров -->
+    <!-- Таблица параметров с обёрткой -->
     <h3 style="margin-top: 20px">Параметры</h3>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Параметр</th>
-          <th>Значение</th>
-          <th>Ед. изм.</th>
-          <th>Основной</th>
-          <th>Действия</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="param in parameters" :key="param.id">
-          <td>{{ param.name }}</td>
-          <td>{{ param.value }}</td>
-          <td>{{ param.unit }}</td>
-          <td>{{ param.isMain ? '✅' : '' }}</td>
-          <td>
-            <button class="btn btn-sm btn-secondary" @click="editParam(param)">✏️</button>
-            <button class="btn btn-sm btn-danger" @click="deleteParam(param.id)">🗑️</button>
-          </td>
-        </tr>
-        <tr v-if="parameters.length === 0">
-          <td colspan="5">Нет параметров</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Параметр</th>
+            <th>Значение</th>
+            <th>Ед. изм.</th>
+            <th>Основной</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="param in parameters" :key="param.id">
+            <td>{{ param.name }}</td>
+            <td>{{ param.value }}</td>
+            <td>{{ param.unit }}</td>
+            <td>{{ param.isMain ? '✅' : '' }}</td>
+            <td>
+              <button class="btn btn-sm btn-secondary" @click="editParam(param)">✏️</button>
+              <button class="btn btn-sm btn-danger" @click="deleteParam(param.id)">🗑️</button>
+            </td>
+          </tr>
+          <tr v-if="parameters.length === 0">
+            <td colspan="5">Нет параметров</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <!-- Форма добавления параметра -->
     <div class="add-param-section">
@@ -87,10 +93,7 @@
     </div>
 
     <!-- График изменения ресурса -->
-    <ResourceChart 
-      v-if="resource && parameters.length > 0" 
-      :resource-id="resource.id" 
-    />
+    <ResourceChart v-if="resource && parameters.length > 0" :resource-id="resource.id" />
 
     <!-- Примечания -->
     <div class="notes-section" v-if="resource.notes">
@@ -112,84 +115,90 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { useResourcesStore } from '../stores/resourcesStore';
-import ResourceForm from './ResourceForm.vue';
-import ResourceChart from './ResourceChart.vue';
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useResourcesStore } from '../stores/resourcesStore'
+import ResourceForm from './ResourceForm.vue'
+import ResourceChart from './ResourceChart.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 
-const route = useRoute();
-const router = useRouter();
-const store = useResourcesStore();
-const formRef = ref();
-const confirmDialog = ref();
+const route = useRoute()
+const router = useRouter()
+const store = useResourcesStore()
+const formRef = ref()
+const confirmDialog = ref()
 
-const resource = ref<any>(null);
-const parameters = ref<any[]>([]);
+const resource = ref<any>(null)
+const parameters = ref<any[]>([])
 
 const canEdit = computed(() => {
-  const user = localStorage.getItem('user');
-  if (!user) return false;
-  const role = JSON.parse(user).role;
-  return role === 'operator' || role === 'admin';
-});
+  const user = localStorage.getItem('user')
+  if (!user) return false
+  const role = JSON.parse(user).role
+  return role === 'operator' || role === 'admin'
+})
 
-const newParam = ref({ name: '', value: '', unit: '', isMain: false });
+const newParam = ref({ name: '', value: '', unit: '', isMain: false })
 
 function load() {
-  const id = Number(route.params.id);
-  resource.value = store.resources.find(r => r.id === id);
+  const id = Number(route.params.id)
+  resource.value = store.resources.find((r) => r.id === id)
   if (resource.value) {
-    parameters.value = store.getParametersForResource(id);
+    parameters.value = store.getParametersForResource(id)
   }
 }
 
-function goBack() { router.back(); }
-function editResource() { formRef.value?.open(resource.value); }
+function goBack() {
+  router.back()
+}
+function editResource() {
+  formRef.value?.open(resource.value)
+}
 async function deleteResource() {
-  const ok = await confirmDialog.value?.show('Удаление', 'Удалить ресурс?');
+  const ok = await confirmDialog.value?.show('Удаление', 'Удалить ресурс?')
   if (ok) {
-    store.deleteResource(resource.value.id);
-    router.back();
+    store.deleteResource(resource.value.id)
+    router.back()
   }
 }
 
 function addParameter() {
-  if (!newParam.value.name || !newParam.value.value) return;
+  if (!newParam.value.name || !newParam.value.value) return
   store.addParameter({
     resourceId: resource.value.id,
     name: newParam.value.name,
     value: newParam.value.value,
     unit: newParam.value.unit,
     isMain: newParam.value.isMain,
-  });
-  newParam.value = { name: '', value: '', unit: '', isMain: false };
-  refresh();
+  })
+  newParam.value = { name: '', value: '', unit: '', isMain: false }
+  refresh()
 }
 
 function editParam(param: any) {
-  const newValue = prompt('Новое значение:', param.value);
+  const newValue = prompt('Новое значение:', param.value)
   if (newValue !== null && newValue !== param.value) {
-    store.updateParameter(param.id, { ...param, value: newValue });
-    refresh();
+    store.updateParameter(param.id, { ...param, value: newValue })
+    refresh()
   }
 }
 
 async function deleteParam(id: number) {
-  const ok = await confirmDialog.value?.show('Удаление', 'Удалить параметр?');
+  const ok = await confirmDialog.value?.show('Удаление', 'Удалить параметр?')
   if (ok) {
-    store.deleteParameter(id);
-    refresh();
+    store.deleteParameter(id)
+    refresh()
   }
 }
 
-function refresh() { load(); }
+function refresh() {
+  load()
+}
 
 onMounted(() => {
-  load();
-  window.addEventListener('resource-saved', refresh);
-});
+  load()
+  window.addEventListener('resource-saved', refresh)
+})
 </script>
 
 <style scoped>

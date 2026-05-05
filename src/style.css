@@ -43,11 +43,11 @@ body {
   margin: 10px 0;
 }
 
-/* ===== ТАБЛИЦЫ ===== */
+/* Дизайн таблицы (без изменений) */
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  /* Убираем min-width, таблица будет подстраиваться под контент */
+  table-layout: auto;
 }
 
 .data-table th,
@@ -55,8 +55,6 @@ body {
   border: 1px solid #e0e4e8;
   padding: 10px 12px;
   text-align: left;
-  /* Убираем white-space: nowrap, чтобы текст переносился */
-  word-break: break-word;
 }
 
 .data-table th {
@@ -64,7 +62,6 @@ body {
   font-weight: 600;
   cursor: pointer;
   user-select: none;
-  white-space: nowrap; /* Заголовки не переносим */
 }
 
 .data-table th:hover {
@@ -73,31 +70,6 @@ body {
 
 .data-table tr:hover {
   background-color: #f8f9fa;
-}
-
-/* Только когда таблица не помещается - появляется прокрутка */
-@media (max-width: 1200px) {
-  .data-table {
-    min-width: 1000px;
-  }
-}
-
-@media (max-width: 900px) {
-  .data-table {
-    min-width: 800px;
-  }
-}
-
-@media (max-width: 700px) {
-  .data-table {
-    min-width: 650px;
-  }
-
-  .data-table th,
-  .data-table td {
-    padding: 8px 10px;
-    font-size: 12px;
-  }
 }
 
 /* ===== КНОПКИ ===== */
@@ -154,6 +126,7 @@ body {
 .action-buttons {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 /* ===== ФОРМЫ ===== */
@@ -319,7 +292,6 @@ body {
 .warning-row {
   background-color: #fff3e0;
 }
-
 .warning-row:hover {
   background-color: #ffe8c7;
 }
@@ -327,7 +299,6 @@ body {
 .expired-row {
   background-color: #ffe0e0;
 }
-
 .expired-row:hover {
   background-color: #ffd0d0;
 }
@@ -337,7 +308,6 @@ body {
   color: #999;
   opacity: 0.7;
 }
-
 .disabled-row:hover {
   background-color: #e8e8e8;
 }
@@ -388,81 +358,133 @@ body {
   font-size: 12px;
 }
 
-/* ===== АДАПТАЦИЯ ДЛЯ МАЛЕНЬКИХ ЭКРАНОВ ===== */
-@media (max-width: 900px) {
-  .data-table {
-    min-width: 700px;
-  }
+/* ===== АДАПТАЦИЯ ДЛЯ РАЗНЫХ РАЗРЕШЕНИЙ ЭКРАНОВ ===== */
 
+/* Для экранов шире 1400px – максимум */
+@media (min-width: 1400px) {
+  .container {
+    max-width: 1400px;
+  }
+  .data-table {
+    table-layout: auto;
+  }
+}
+
+/* Для экранов 1200-1400px */
+@media (max-width: 1400px) {
+  .container {
+    max-width: 1200px;
+  }
   .data-table th,
   .data-table td {
     padding: 8px 10px;
   }
 }
 
-@media (max-width: 768px) {
+/* Для экранов 1000-1200px */
+@media (max-width: 1200px) {
+  .container {
+    max-width: 1000px;
+  }
+  .data-table th,
+  .data-table td {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+}
+
+/* Для экранов 900-1000px – здесь появляется прокрутка */
+@media (max-width: 1000px) {
+  .data-table {
+    min-width: 900px;
+  }
+}
+
+/* Для экранов 768-900px */
+@media (max-width: 900px) {
   .equipment-view,
   .resources-view {
     flex-direction: column;
   }
-
   .equipment-view .sidebar,
   .resources-view .sidebar {
     width: 100%;
   }
+  .data-table {
+    min-width: 800px;
+  }
+}
 
+/* Для планшетов 600-768px */
+@media (max-width: 768px) {
   .app-header {
     height: auto;
     flex-direction: column;
     padding: 10px;
   }
-
   .nav-menu {
     justify-content: center;
   }
-
   .modal-content {
     width: 95%;
   }
-
   .form-row {
     flex-direction: column;
     gap: 0;
   }
-
   .action-buttons {
     flex-direction: column;
     align-items: stretch;
   }
-
   .action-buttons .btn {
     margin-bottom: 5px;
   }
-}
-
-@media (max-width: 600px) {
   .data-table {
-    min-width: 550px;
+    min-width: 700px;
   }
-
   .data-table th,
   .data-table td {
     padding: 6px 8px;
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 
-@media (max-width: 480px) {
+/* Для мобильных устройств 480-600px */
+@media (max-width: 600px) {
   .button-group {
     flex-direction: column;
     align-items: stretch;
   }
+  .container {
+    padding: 15px;
+  }
+  .card {
+    padding: 15px;
+  }
+  .data-table {
+    min-width: 550px;
+  }
+  .data-table th,
+  .data-table td {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+}
 
+/* Для маленьких мобильных устройств до 480px */
+@media (max-width: 480px) {
   .container {
     padding: 10px;
   }
-
   .card {
-    padding: 12px;
+    padding: 10px;
+  }
+  .data-table {
+    min-width: 480px;
+  }
+  .data-table th,
+  .data-table td {
+    padding: 3px 4px;
+    font-size: 10px;
   }
 }
