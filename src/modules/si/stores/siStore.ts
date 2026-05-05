@@ -26,17 +26,18 @@ const mockInstruments: MeasuringInstrument[] = [
   },
   {
     id: 2,
-    tabNumber: 'БДГ-045',
+    tabNumber: '211',
     name: 'Блок детектирования',
     type: 'Блок детектирования',
-    verificationInterval: 2,
-    lastVerificationDate: '2025-06-10',
-    nextVerificationDate: addYears('2025-06-10', 2),
+      nodeId: 2, // ← привязка к узлу
+    verificationInterval: 1,
+    lastVerificationDate: '2024-01-15',
+    nextVerificationDate: '2025-01-15',
     status: 'в эксплуатации',
     location: 'Пост контроля АСКРО',
     verifier: 'Саратовский ЦСМ',
     isDeleted: false,
-    nodeId: 2,
+  
   },
   {
     id: 3,

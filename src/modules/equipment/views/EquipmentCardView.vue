@@ -1,63 +1,129 @@
-<template>
+<<template>
   <div class="card" v-if="node">
-    <div style="display: flex; justify-content: space-between; margin-bottom: 20px">
-  <h2>{{ node.name }}</h2>
-  <div>
-    <button class="btn btn-secondary" @click="goBack">← Назад</button>
-    <button v-if="canEdit" class="btn btn-primary" @click="editNode">Редактировать</button>
-    <button v-if="canEdit" class="btn btn-danger" @click="deleteNode">Списать</button>
-    <button v-if="canEdit" class="btn btn-secondary" @click="openMoveModal">📦 Переместить</button>
-  </div>
-</div>
-
-<!-- Блок быстрых переходов к связанным модулям -->
-<div class="quick-links">
-  <button class="btn btn-outline" @click="goToResources">📊 Ресурсы узла</button>
-  <button class="btn btn-outline" @click="goToSI">📏 Средства измерения</button>
-</div>
-
-    <!-- Основные сведения -->
-    <table style="width: 100%">
-      <tr><td style="width: 200px"><strong>ID</strong></td><td>{{ node.id }}</td></tr>
-      <tr><td><strong>Тип</strong></td><td>{{ node.type === 'aggregate' ? 'Агрегат' : 'Блок' }}</td></tr>
-      <tr><td><strong>Местоположение</strong></td><td>{{ node.location || '-' }}</td></tr>
-      <tr><td><strong>Характеристики</strong></td><td><pre>{{ JSON.stringify(node.characteristics, null, 2) }}</pre></td></tr>
-      <tr><td><strong>Дата создания</strong></td><td>{{ node.createdAt }}</td></tr>
-      <tr><td><strong>Дата обновления</strong></td><td>{{ node.updatedAt }}</td></tr>
-    </table>
-
-    <!-- Состав (только для агрегатов) -->
-    <div v-if="node.type === 'aggregate'" style="margin-top: 20px">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px">
-        <h3>Состав</h3>
-        <button v-if="canEdit" class="btn btn-sm btn-primary" @click="openAddChildModal">+ Добавить в состав</button>
+    <!-- Заголовок и кнопки управления -->
+    <div class="card-header">
+      <h2>{{ node.name }}</h2>
+      <div class="action-buttons">
+        <button class="btn btn-secondary" @click="goBack">← Назад</button>
+        <button v-if="canEdit" class="btn btn-primary" @click="editNode">Редактировать</button>
+        <button v-if="canEdit" class="btn btn-danger" @click="deleteNode">Списать</button>
+        <button v-if="canEdit" class="btn btn-secondary" @click="openMoveModal">📦 Переместить</button>
       </div>
-      <table class="data-table" v-if="children.length">
+    </div>
+
+    <!-- Основные сведения (две колонки) -->
+    <div class="info-grid">
+      <!-- Левая колонка -->
+      <div class="info-col">
+        <div class="info-row"><strong>Марка</strong><span>{{ node.model || '-' }}</span></div>
+        <div class="info-row"><strong>Наименование</strong><span>{{ node.name }}</span></div>
+        <div class="info-row"><strong>Подсистема</strong><span>{{ node.subsystem || '-' }}</span></div>
+        <div class="info-row"><strong>Производитель</strong><span>{{ node.manufacturer || '-' }}</span></div>
+        <div class="info-row"><strong>Дата установки</strong><span>{{ formatDate(node.dateInstallation) }}</span></div>
+        <div class="info-row"><strong>Состояние</strong><span>{{ node.condition || '-' }}</span></div>
+        <div class="info-row"><strong>Заводской номер</strong><span>{{ node.serialNumber || '-' }}</span></div>
+        <div class="info-row"><strong>Учетный номер</strong><span>{{ node.accountingNumber || '-' }}</span></div>
+        <div class="info-row"><strong>Режим работы</strong><span>{{ node.operationMode || '-' }}</span></div>
+      </div>
+
+      <!-- Правая колонка -->
+      <div class="info-col">
+        <div class="info-row"><strong>Тип</strong><span>{{ node.type === 'aggregate' ? 'Агрегат' : 'Блок' }}</span></div>
+        <div class="info-row">
+          <strong>Узел</strong>
+          <span v-if="node.parentId" class="clickable-link" @click="goToParent">{{ getParentName() }}</span>
+          <span v-else>-</span>
+        </div>
+        <div class="info-row"><strong>Размещение</strong><span>{{ node.location || '-' }}</span></div>
+        <div class="info-row"><strong>Дата производства</strong><span>{{ formatDate(node.dateManufacture) }}</span></div>
+        <div class="info-row"><strong>Ресурс</strong><span>{{ node.resource || '-' }}</span></div>
+        <div class="info-row"><strong>СИ</strong><span>{{ node.isSI ? 'да' : 'нет' }}</span></div>
+        <div class="info-row"><strong>Инвентарный номер</strong><span>{{ node.inventoryNumber || '-' }}</span></div>
+        <div class="info-row"><strong>Агрегат</strong><span>{{ node.type === 'aggregate' ? 'да' : 'нет' }}</span></div>
+      </div>
+    </div>
+
+    <!-- Таблица параметров (характеристики с пометкой "Основной") -->
+    <div class="section">
+      <h3>Параметры</h3>
+      <table class="data-table" v-if="Object.keys(mainParams).length">
         <thead>
-          <tr><th>ID</th><th>Наименование</th><th>Тип</th><th>Действия</th></tr>
+          <tr><th>Параметр</th><th>Значение</th><th>Ед. изм.</th><th>Основной</th></tr>
         </thead>
         <tbody>
-          <tr v-for="child in children" :key="child.id">
-            <td>{{ child.id }}</td>
-            <td>{{ child.name }}</td>
-            <td>{{ child.type === 'aggregate' ? 'Агрегат' : 'Блок' }}</td>
-            <td>
-              <button class="btn btn-sm btn-secondary" @click="viewChild(child.id)">Открыть</button>
-              <button v-if="canEdit" class="btn btn-sm btn-danger" @click="removeChild(child.id)">Удалить из состава</button>
-            </td>
+          <tr v-for="(param, name) in mainParams" :key="name">
+            <td>{{ name }}</td>
+            <td>{{ param.value }}</td>
+            <td>{{ param.unit || '-' }}</td>
+            <td>{{ param.isMain ? '✓' : '' }}</td>
           </tr>
         </tbody>
       </table>
-      <div v-else class="empty-message">Нет дочерних узлов</div>
+      <div v-else class="empty-message">Параметры не заданы</div>
     </div>
 
-    <!-- Ресурсы -->
-    <ResourceList :nodeId="node.id" />
+    <!-- Установленные узлы и ресурсы (объединённый блок) -->
+    <div class="section">
+      <h3>Установленные узлы и ресурсы</h3>
+
+      <!-- Состав (дочерние узлы) – только для агрегатов -->
+      <div v-if="node.type === 'aggregate' && children.length" class="subsection">
+        <h4>Состав (дочерние узлы)</h4>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Наименование</th>
+              <th>Тип</th>
+              <th>Производитель</th>
+              <th>Марка</th>
+              <th>Основные параметры</th>
+              <th>Примечания</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="child in children" :key="child.id">
+              <td>
+                <span class="clickable-link" @click="viewChild(child.id)">{{ child.name }}</span>
+              </td>
+              <td>{{ child.type === 'aggregate' ? 'Агрегат' : 'Блок' }}</td>
+              <td>{{ child.manufacturer || '-' }}</td>
+              <td>{{ child.model || '-' }}</td>
+              <td>{{ getMainParamsShort(child) }}</td>
+              <td>{{ child.note || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Ресурсы -->
+      <div v-if="resources.length" class="subsection">
+        <h4>Ресурсы</h4>
+        <table class="data-table">
+          <thead>
+            <tr><th>Наименование</th><th>Значение</th><th>Ед. изм.</th><th>Обновлено</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="res in resources" :key="res.id">
+              <td>
+                <span class="clickable-link" @click="goToResource(res.id)">{{ res.name }}</span>
+              </td>
+              <td>{{ res.value }}</td>
+              <td>{{ res.unit || '-' }}</td>
+              <td>{{ formatDate(res.updatedAt) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div v-if="node.type !== 'aggregate' && !resources.length" class="empty-message">
+        Нет установленных узлов или ресурсов
+      </div>
+    </div>
 
     <!-- История перемещений -->
-    <div style="margin-top: 20px">
+    <div class="section" v-if="moveHistory.length">
       <h3>История перемещений</h3>
-      <table class="data-table" v-if="moveHistory.length">
+      <table class="data-table">
         <thead>
           <tr><th>Дата</th><th>Откуда</th><th>Куда</th><th>Пользователь</th></tr>
         </thead>
@@ -70,8 +136,12 @@
           </tr>
         </tbody>
       </table>
-      <div v-else class="empty-message">История перемещений пуста</div>
     </div>
+
+    <!-- Модальные окна -->
+    <EquipmentForm ref="formRef" @saved="refresh" />
+    <AddChildModal ref="addChildModalRef" @added="refresh" />
+    <ConfirmDialog ref="confirmDialog" />
 
     <!-- Модальное окно перемещения -->
     <div class="modal-overlay" v-if="showMoveModal">
@@ -87,39 +157,38 @@
         </div>
       </div>
     </div>
-
-    <!-- Модальные окна -->
-    <EquipmentForm ref="formRef" @saved="refresh" />
-    <AddChildModal ref="addChildModalRef" @added="refresh" />
-    <ConfirmDialog ref="confirmDialog" />
   </div>
+
   <div v-else class="card">Загрузка...</div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useEquipmentStore } from '../stores/equipmentStore';
 import EquipmentForm from '../components/EquipmentForm.vue';
 import AddChildModal from '../components/AddChildModal.vue';
-import ResourceList from '../components/ResourceList.vue';
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
-
+import { formatDate } from '@/utils/dateUtils';
 
 const route = useRoute();
 const router = useRouter();
 const store = useEquipmentStore();
 
+// Refs
 const formRef = ref();
 const addChildModalRef = ref();
 const confirmDialog = ref();
-
 const node = ref<any>(null);
 const children = ref<any[]>([]);
+const resources = ref<any[]>([]);
 const moveHistory = ref<any[]>([]);
+
+// Перемещение
 const showMoveModal = ref(false);
 const newLocation = ref('');
 
+// Права доступа
 const canEdit = computed(() => {
   const user = localStorage.getItem('user');
   if (!user) return false;
@@ -131,17 +200,84 @@ const canEdit = computed(() => {
   }
 });
 
-function load() {
-  const id = Number(route.params.id);
+// Интерфейс для характеристики
+interface CharacteristicValue {
+  value: string | number;
+  unit?: string;
+  isMain?: boolean;
+}
+
+// Основные параметры (характеристики с флагом isMain)
+const mainParams = computed(() => {
+  if (!node.value?.characteristics) return {};
+  const chars = node.value.characteristics as Record<string, CharacteristicValue>;
+  return Object.fromEntries(
+    Object.entries(chars).filter(([_, val]) => val?.isMain === true)
+  ) as Record<string, CharacteristicValue>;
+});
+
+// Вспомогательная функция для краткого отображения основных параметров дочернего узла
+function getMainParamsShort(child: any) {
+  if (!child.characteristics) return '';
+  const mains = Object.entries(child.characteristics)
+    .filter(([_, val]: any) => val?.isMain === true)
+    .map(([key, val]: any) => `${key}: ${val.value} ${val.unit || ''}`.trim())
+    .join(', ');
+  return mains || '-';
+}
+
+// Имя родительского узла
+function getParentName() {
+  if (!node.value.parentId) return '-';
+  const parent = store.getNode(node.value.parentId);
+  return parent ? parent.name : '-';
+}
+
+// Переход к родительскому узлу
+function goToParent() {
+  if (node.value && node.value.parentId) {
+    router.push(`/equipment/${node.value.parentId}`);
+  }
+}
+
+// Загрузка данных по id
+function loadById(id: number) {
   node.value = store.getNode(id);
   if (node.value) {
     children.value = store.nodes.filter((n: any) => n.parentId === id && !n.isDeleted);
+    resources.value = store.getResourcesForNode(id);
     moveHistory.value = store.getMoveHistoryForNode(id);
   }
 }
 
+// Обновление данных после сохранения
+function refresh() {
+  const currentId = Number(route.params.id);
+  loadById(currentId);
+}
+
+// Навигация и редактирование
 function goBack() { router.back(); }
 function editNode() { formRef.value?.open(node.value); }
+function viewChild(id: number) {
+  const childNode = store.getNode(id);
+  if (childNode && childNode.isSI) {
+    // Переход в модуль СИ с параметром nodeId
+    router.push({ path: '/si', query: { nodeId: id.toString() } });
+  } else {
+    router.push(`/equipment/${id}`);
+  }
+}
+
+// Переход к модулю «Ресурсы» с параметром resourceId
+function goToResource(resourceId: number) {
+  router.push({ path: '/resources', query: { resourceId: resourceId.toString(), nodeId: node.value.id.toString() } });
+}
+function goToSI() {
+  // Поиск СИ, связанного с текущим узлом, или просто переход с параметром nodeId
+  router.push({ path: '/si', query: { nodeId: node.value.id.toString() } });
+}
+// Списание с подтверждением
 async function deleteNode() {
   const ok = await confirmDialog.value?.show('Списание', 'Списать узел?');
   if (ok) {
@@ -149,13 +285,6 @@ async function deleteNode() {
     router.back();
   }
 }
-function openAddChildModal() { addChildModalRef.value?.open(node.value.id); }
-function viewChild(id: number) { router.push(`/equipment/${id}`); }
-async function removeChild(childId: number) {
-  const ok = await confirmDialog.value?.show('Удаление из состава', 'Удалить узел из состава?');
-  if (ok) store.removeChild(node.value.id, childId);
-}
-function refresh() { load(); }
 
 // Перемещение
 function openMoveModal() {
@@ -173,40 +302,75 @@ function saveMove() {
   closeMoveModal();
 }
 
-// Переход к модулям
-function goToResources() {
-  router.push(`/resources?nodeId=${node.value.id}`);
-}
+// Следим за изменением параметра id в маршруте
+watch(
+  () => route.params.id,
+  (newId) => {
+    if (newId) {
+      loadById(Number(newId));
+    }
+  },
+  { immediate: true }
+);
 
-function goToSI() {
-  router.push(`/si?nodeId=${node.value.id}`);
-}
-
+// Подписка на события обновления данных
 onMounted(() => {
-  load();
   window.addEventListener('equipment-saved', refresh);
-  window.addEventListener('resource-saved', refresh);
+  window.addEventListener('resource-saved', () => {
+    const id = Number(route.params.id);
+    resources.value = store.getResourcesForNode(id);
+  });
 });
 </script>
 
 <style scoped>
-pre { background: #f8f9fa; padding: 8px; border-radius: 4px; font-size: 12px; }
-.empty-message { color: #999; font-style: italic; padding: 10px; }
-
-.quick-links {
+.card-header {
   display: flex;
-  gap: 15px;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 20px;
-  padding-bottom: 10px;
+}
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+}
+.info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.info-row {
+  display: flex;
+  justify-content: space-between;
   border-bottom: 1px solid #e0e4e8;
+  padding-bottom: 4px;
 }
-.btn-outline {
-  background: transparent;
-  border: 1px solid #2c5f8a;
+.info-row strong {
+  width: 160px;
+}
+.section {
+  margin-top: 20px;
+}
+.subsection {
+  margin-top: 16px;
+  margin-left: 16px;
+}
+.empty-message {
+  color: #999;
+  font-style: italic;
+  padding: 10px;
+}
+.clickable-link {
+  cursor: pointer;
   color: #2c5f8a;
+  text-decoration: underline;
 }
-.btn-outline:hover {
-  background: #2c5f8a;
-  color: white;
+.clickable-link:hover {
+  color: #1e4566;
 }
 </style>

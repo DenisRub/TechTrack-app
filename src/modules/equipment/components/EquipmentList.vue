@@ -189,10 +189,10 @@ const filteredAndSortedNodes = computed(() => {
 // ---------- Остальные методы ----------
 function formatCell(node: EquipmentNode, key: string) {
   if (key === 'type') return node.type === 'aggregate' ? 'Агрегат' : 'Блок';
-  if (key === 'createdAt' || key === 'updatedAt') return node[key] || '-';
-  return (node as any)[key] ?? '-';
+  if (key === 'isSI') return node.isSI ? 'да' : 'нет';
+  const val = (node as any)[key];
+  return val ?? '-';
 }
-
 const canEdit = computed(() => {
   const user = localStorage.getItem('user');
   if (!user) return false;
@@ -215,39 +215,63 @@ function refresh() { applyQuickFilters(); }
 
 // ---------- Экспорт ----------
 function getExportData() {
-  return filteredAndSortedNodes.value.map(n => ({
-    'ID': n.id,
+  return store.nodes.map(n => ({
+    'Подсистема': n.subsystem || '',
     'Наименование': n.name,
     'Тип': n.type === 'aggregate' ? 'Агрегат' : 'Блок',
-    'Местоположение': n.location || '',
-    'Дата создания': n.createdAt,
-    'Дата обновления': n.updatedAt,
-    'Характеристики': JSON.stringify(n.characteristics),
+    'Производитель': n.manufacturer || '',
+    'Марка': n.model || '',
+    'Зав. №': n.serialNumber || '',
+    'Инв. №': n.inventoryNumber || '',
+    'СИ': n.isSI ? 'да' : 'нет',
+    'Состояние': n.condition || '',
+    'Ресурс': n.resource || '',
+    'Размещение': n.location || '',
+    'Примечание': n.note || '',
   }));
 }
 function exportToExcelFile() {
   const data = getExportData();
-  const filename = `Оборудование_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`;
+  const now = new Date();
+const year = now.getFullYear();
+const month = String(now.getMonth() + 1).padStart(2, '0');
+const day = String(now.getDate()).padStart(2, '0');
+const hours = String(now.getHours()).padStart(2, '0');
+const minutes = String(now.getMinutes()).padStart(2, '0');
+const seconds = String(now.getSeconds()).padStart(2, '0');
+const filename = `Оборудование_${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
   exportToExcel(data, filename);
 }
 function exportToWordFile() {
   const data = getExportData();
   const headers = Object.keys(data[0] || {});
-  const filename = `Оборудование_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`;
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const filename = `Оборудование_${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
   exportToWord(data, headers, filename);
 }
 
 // ---------- Настройка колонок ----------
 const allColumns = [
-  { key: 'id', label: 'ID' },
+  { key: 'subsystem', label: 'Подсистема' },
   { key: 'name', label: 'Наименование' },
   { key: 'type', label: 'Тип' },
-  { key: 'location', label: 'Местоположение' },
-  { key: 'createdAt', label: 'Дата создания' },
-  { key: 'updatedAt', label: 'Дата обновления' },
+  { key: 'manufacturer', label: 'Производитель' },
+  { key: 'model', label: 'Марка' },
+  { key: 'serialNumber', label: 'Зав. №' },
+  { key: 'inventoryNumber', label: 'Инв. №' },
+  { key: 'isSI', label: 'СИ' },
+  { key: 'condition', label: 'Состояние' },
+  { key: 'resource', label: 'Ресурс' },
+  { key: 'location', label: 'Размещение' },
+  { key: 'note', label: 'Примечание' },
 ];
-const selectedColumns = ref<string[]>(['id', 'name', 'type', 'location']);
-const showColumnSettings = ref(false);
+const selectedColumns = ref(['subsystem', 'name', 'type', 'manufacturer', 'model', 'serialNumber', 'inventoryNumber', 'condition', 'location']);const showColumnSettings = ref(false);
 const visibleCols = computed(() => allColumns.filter(c => selectedColumns.value.includes(c.key)));
 
 // Инициализация

@@ -12,7 +12,6 @@ function getCurrentDate(): string {
 
 // Расширенные мок-данные – ресурсы (привязаны к узлам оборудования)
 const mockResources: Resource[] = [
-  // Узел 1: Пост контроля АСКРО СЗЗ №9 (агрегат)
   {
     id: 1,
     nodeId: 1,
@@ -31,7 +30,6 @@ const mockResources: Resource[] = [
     updatedAt: '2024-01-01',
     isDeleted: false,
   },
-  // Узел 2: Блок детектирования БДГ-01 №373 (блок)
   {
     id: 2,
     nodeId: 2,
@@ -50,7 +48,6 @@ const mockResources: Resource[] = [
     updatedAt: '2024-02-10',
     isDeleted: false,
   },
-  // Узел 3: Мобильный маршрутизатор iRZ RUH2b (блок)
   {
     id: 3,
     nodeId: 3,
@@ -69,7 +66,6 @@ const mockResources: Resource[] = [
     updatedAt: '2024-03-01',
     isDeleted: false,
   },
-  // Узел 4: Блок питания резервный (блок, свободный, не в составе)
   {
     id: 4,
     nodeId: 4,
@@ -90,23 +86,18 @@ const mockResources: Resource[] = [
   },
 ];
 
-// Расширенные мок-данные – параметры для каждого ресурса
 const mockParameters: ResourceParameter[] = [
-  // Ресурс 1 (Аккумулятор)
   { id: 1, resourceId: 1, name: 'Емкость', value: 85, unit: '%', isMain: true },
   { id: 2, resourceId: 1, name: 'Напряжение', value: 12.2, unit: 'В', isMain: false },
   { id: 3, resourceId: 1, name: 'Внутреннее сопротивление', value: 0.022, unit: 'Ом', isMain: false },
   { id: 4, resourceId: 1, name: 'Остаточный срок службы', value: 3.5, unit: 'лет', isMain: true },
-  // Ресурс 2 (Детектор)
   { id: 5, resourceId: 2, name: 'Эффективность регистрации', value: 92, unit: '%', isMain: true },
   { id: 6, resourceId: 2, name: 'Напряжение питания', value: 12.0, unit: 'В', isMain: false },
   { id: 7, resourceId: 2, name: 'Ток потребления', value: 0.5, unit: 'А', isMain: false },
   { id: 8, resourceId: 2, name: 'Остаточный срок службы', value: 6.5, unit: 'лет', isMain: true },
-  // Ресурс 3 (Маршрутизатор)
   { id: 9, resourceId: 3, name: 'Уровень сигнала', value: 75, unit: '%', isMain: true },
   { id: 10, resourceId: 3, name: 'Трафик (мес)', value: 1250, unit: 'ГБ', isMain: false },
   { id: 11, resourceId: 3, name: 'Остаточный ресурс', value: 0.5, unit: 'лет', isMain: true },
-  // Ресурс 4 (Блок питания)
   { id: 12, resourceId: 4, name: 'Выходное напряжение', value: 12.1, unit: 'В', isMain: true },
   { id: 13, resourceId: 4, name: 'Ток нагрузки', value: 2.5, unit: 'А', isMain: false },
   { id: 14, resourceId: 4, name: 'КПД', value: 88, unit: '%', isMain: true },
@@ -116,13 +107,18 @@ export const useResourcesStore = defineStore('resources', () => {
   const resources = ref<Resource[]>([...mockResources]);
   const parameters = ref<ResourceParameter[]>([...mockParameters]);
 
+  // Активные ресурсы (не удалённые)
   const activeResources = computed(() => resources.value.filter(r => !r.isDeleted));
+  
+  // Основные параметры (isMain === true)
   const mainParameters = computed(() => parameters.value.filter(p => p.isMain));
 
+  // Получить параметры для конкретного ресурса
   function getParametersForResource(resourceId: number): ResourceParameter[] {
     return parameters.value.filter(p => p.resourceId === resourceId);
   }
 
+  // Получить остаточный срок службы (остаточный ресурс) в годах
   function getRemainingLife(resourceId: number): number | null {
     const params = getParametersForResource(resourceId);
     const lifeParam = params.find(p => p.name === 'Остаточный срок службы' || p.name === 'Остаточный ресурс');
@@ -132,7 +128,7 @@ export const useResourcesStore = defineStore('resources', () => {
     return null;
   }
 
-  // Дополнительная функция для получения параметра по имени (для графиков)
+  // Получить значение параметра по имени
   function getParameterValue(resourceId: number, paramName: string): number | null {
     const param = parameters.value.find(p => p.resourceId === resourceId && p.name === paramName);
     return param ? (typeof param.value === 'number' ? param.value : parseFloat(param.value as string)) : null;
@@ -172,7 +168,7 @@ export const useResourcesStore = defineStore('resources', () => {
     return true;
   }
 
-  // ========== CRUD ==========
+  // ========== CRUD ресурсов ==========
   function addResource(res: Omit<Resource, 'id' | 'createdAt' | 'updatedAt' | 'isDeleted'>) {
     const newId = Math.max(...resources.value.map(r => r.id), 0) + 1;
     const now = getCurrentDate();
@@ -191,12 +187,12 @@ export const useResourcesStore = defineStore('resources', () => {
     };
   }
 
- function deleteResource(id: number) {
-  const resource = resources.value.find(r => r.id === id);
-  if (resource) {
-    resource.isDeleted = true;
+  function deleteResource(id: number) {
+    const resource = resources.value.find(r => r.id === id);
+    if (resource) {
+      resource.isDeleted = true;
+    }
   }
-}
 
   // ========== Параметры ==========
   function addParameter(param: Omit<ResourceParameter, 'id'>) {
