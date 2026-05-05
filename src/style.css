@@ -1,25 +1,32 @@
-/* Деловой стиль – серые/синие тона, строгие линии */
-
+/* ===== БАЗОВЫЕ СТИЛИ ===== */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+  width: 100%;
+}
+
 body {
   font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
   background-color: #f0f2f5;
   color: #1a2a3a;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
-/* Контейнеры */
+/* ===== КОНТЕЙНЕРЫ ===== */
 .container {
   max-width: 1400px;
   margin: 0 auto;
   padding: 20px;
 }
 
-/* Карточки */
+/* ===== КАРТОЧКИ ===== */
 .card {
   background: white;
   border-radius: 8px;
@@ -29,7 +36,71 @@ body {
   border: 1px solid #e0e4e8;
 }
 
-/* Кнопки */
+/* ===== ОБЁРТКА ДЛЯ ТАБЛИЦ С ПРОКРУТКОЙ ===== */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+
+/* ===== ТАБЛИЦЫ ===== */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  /* Убираем min-width, таблица будет подстраиваться под контент */
+}
+
+.data-table th,
+.data-table td {
+  border: 1px solid #e0e4e8;
+  padding: 10px 12px;
+  text-align: left;
+  /* Убираем white-space: nowrap, чтобы текст переносился */
+  word-break: break-word;
+}
+
+.data-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap; /* Заголовки не переносим */
+}
+
+.data-table th:hover {
+  background-color: #e9ecef;
+}
+
+.data-table tr:hover {
+  background-color: #f8f9fa;
+}
+
+/* Только когда таблица не помещается - появляется прокрутка */
+@media (max-width: 1200px) {
+  .data-table {
+    min-width: 1000px;
+  }
+}
+
+@media (max-width: 900px) {
+  .data-table {
+    min-width: 800px;
+  }
+}
+
+@media (max-width: 700px) {
+  .data-table {
+    min-width: 650px;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+}
+
+/* ===== КНОПКИ ===== */
 .btn {
   padding: 8px 16px;
   border-radius: 4px;
@@ -38,75 +109,65 @@ body {
   font-size: 14px;
   transition: all 0.2s;
 }
+
 .btn-primary {
   background-color: #2c5f8a;
   color: white;
 }
+
 .btn-primary:hover {
   background-color: #1e4566;
 }
+
 .btn-secondary {
   background-color: #e9ecef;
   color: #1a2a3a;
   border: 1px solid #ced4da;
 }
+
 .btn-secondary:hover {
   background-color: #dee2e6;
 }
+
 .btn-danger {
   background-color: #c0392b;
   color: white;
 }
+
 .btn-danger:hover {
   background-color: #a93226;
 }
+
 .btn-sm {
   padding: 4px 10px;
   font-size: 12px;
 }
 
-/* Таблицы */
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-}
-.data-table th,
-.data-table td {
-  border: 1px solid #e0e4e8;
-  padding: 10px 12px;
-  text-align: left;
-}
-.data-table th {
-  background-color: #f8f9fa;
-  font-weight: 600;
-  cursor: pointer;
-  user-select: none;
-}
-.data-table th:hover {
-  background-color: #e9ecef;
-}
-.data-table tr:hover {
-  background-color: #f8f9fa;
-}
-/* Подсветка строки с приближающейся поверкой */
-.warning-row {
-  background-color: #fff3e0;
-}
-.warning-row:hover {
-  background-color: #ffe8c7;
+/* ===== ГРУППЫ КНОПОК ===== */
+.button-group {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
-/* Формы */
+.action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+/* ===== ФОРМЫ ===== */
 .form-group {
   margin-bottom: 15px;
 }
+
 .form-group label {
   display: block;
   margin-bottom: 5px;
   font-weight: 500;
   color: #2c3e50;
 }
+
 .form-control {
   width: 100%;
   padding: 8px 12px;
@@ -114,16 +175,29 @@ body {
   border-radius: 4px;
   font-size: 14px;
 }
+
 .form-control.invalid {
   border-color: #c0392b;
 }
+
 .error-text {
   color: #c0392b;
   font-size: 12px;
   margin-top: 4px;
 }
 
-/* Модальные окна */
+/* Горизонтальные ряды для форм */
+.form-row {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+/* ===== МОДАЛЬНЫЕ ОКНА ===== */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -136,22 +210,259 @@ body {
   align-items: center;
   z-index: 1000;
 }
+
 .modal-content {
   background: white;
   border-radius: 8px;
   width: 500px;
   max-width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
   padding: 20px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
+
 .modal-header {
   font-size: 18px;
   font-weight: 600;
   margin-bottom: 15px;
 }
+
 .modal-footer {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+/* ===== ШАПКА ПРИЛОЖЕНИЯ ===== */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #2c5f8a;
+  color: white;
+  padding: 0 20px;
+  height: 56px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.logo-icon {
+  height: 32px;
+  width: auto;
+}
+
+.logo-text {
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.nav-menu {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.nav-menu a {
+  color: white;
+  text-decoration: none;
+  margin: 0 10px;
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.nav-menu a:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.nav-menu a.router-link-active {
+  background-color: rgba(255, 255, 255, 0.2);
+  font-weight: 500;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+/* ===== СТРАНИЦЫ С ДВУМЯ КОЛОНКАМИ ===== */
+.equipment-view,
+.resources-view {
+  display: flex;
+  gap: 20px;
+}
+
+.equipment-view .sidebar,
+.resources-view .sidebar {
+  width: 350px;
+  flex-shrink: 0;
+}
+
+.equipment-view .main,
+.resources-view .main {
+  flex: 1;
+}
+
+/* ===== ЦВЕТОВЫЕ КЛАССЫ ДЛЯ ТАБЛИЦ ===== */
+.warning-row {
+  background-color: #fff3e0;
+}
+
+.warning-row:hover {
+  background-color: #ffe8c7;
+}
+
+.expired-row {
+  background-color: #ffe0e0;
+}
+
+.expired-row:hover {
+  background-color: #ffd0d0;
+}
+
+.disabled-row {
+  background-color: #f0f0f0;
+  color: #999;
+  opacity: 0.7;
+}
+
+.disabled-row:hover {
+  background-color: #e8e8e8;
+}
+
+.status-disabled {
+  color: #999;
+  font-style: italic;
+}
+
+.result-bad {
+  color: #c0392b;
+  font-weight: 500;
+}
+
+.badge-disabled {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #e9ecef;
+  color: #6c757d;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.badge-critical {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #c0392b;
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.badge-warning {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #e67e22;
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.badge-normal {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #27ae60;
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* ===== АДАПТАЦИЯ ДЛЯ МАЛЕНЬКИХ ЭКРАНОВ ===== */
+@media (max-width: 900px) {
+  .data-table {
+    min-width: 700px;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 768px) {
+  .equipment-view,
+  .resources-view {
+    flex-direction: column;
+  }
+
+  .equipment-view .sidebar,
+  .resources-view .sidebar {
+    width: 100%;
+  }
+
+  .app-header {
+    height: auto;
+    flex-direction: column;
+    padding: 10px;
+  }
+
+  .nav-menu {
+    justify-content: center;
+  }
+
+  .modal-content {
+    width: 95%;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .action-buttons .btn {
+    margin-bottom: 5px;
+  }
+}
+
+@media (max-width: 600px) {
+  .data-table {
+    min-width: 550px;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .button-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .container {
+    padding: 10px;
+  }
+
+  .card {
+    padding: 12px;
+  }
 }

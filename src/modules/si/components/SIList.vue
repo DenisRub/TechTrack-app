@@ -10,12 +10,11 @@
       </div>
     </div>
 
-    <!-- Панель фильтров -->
     <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px">
       <input
         v-model="filters.search"
         type="text"
-        placeholder="Поиск по номеру/наименованию (2+ символа)"
+        placeholder="Поиск по номеру/наименованию"
         class="form-control"
         style="width: 250px"
         @input="onSearchInput"
@@ -29,57 +28,40 @@
         <option value="">Все статусы</option>
         <option value="в эксплуатации">В эксплуатации</option>
         <option value="на поверке">На поверке</option>
+        <option value="в ремонте">В ремонте</option>
         <option value="выведено">Выведено</option>
-      </select>
-      <select
-        v-model="filters.verifier"
-        class="form-control"
-        style="width: 180px"
-        @change="applyFilters"
-      >
-        <option value="">Все поверители</option>
-        <option value="Самарский ЦСМ">Самарский ЦСМ</option>
-        <option value="Саратовский ЦСМ">Саратовский ЦСМ</option>
-        <option value="Московский ЦСМ">Московский ЦСМ</option>
-        <option value="Казанский ЦСМ">Казанский ЦСМ</option>
-        <option value="Поверочная лаборатория">Поверочная лаборатория</option>
       </select>
       <button class="btn btn-secondary" @click="resetFilters">Сбросить</button>
     </div>
 
-    <!-- Таблица -->
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th @click="sort('id')">№ п/п</th>
-          <th @click="sort('tabNumber')">Табельный номер</th>
-          <th @click="sort('name')">Наименование</th>
-          <th @click="sort('type')">Тип</th>
-          <th @click="sort('location')">Местоположение</th>
-          <th @click="sort('lastVerificationDate')">Последняя поверка</th>
-          <th @click="sort('nextVerificationDate')">Следующая поверка</th>
-          <th @click="sort('status')">Статус</th>
-          <th @click="sort('verifier')">Поверитель</th>
-          <th>Действия</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="(si, index) in sortedList"
-          :key="si.id"
-          :class="getRowClass(si)"
-          :title="getTooltip(si)"
-        >
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th @click="sort('id')">№ п/п</th>
+            <th @click="sort('tabNumber')">Табельный номер</th>
+            <th @click="sort('name')">Наименование</th>
+            <th @click="sort('location')">Местоположение</th>
+            <th @click="sort('lastVerificationDate')">Последняя поверка</th>
+            <th @click="sort('nextVerificationDate')">Следующая поверка</th>
+            <th @click="sort('status')">Статус</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+
+        <tr v-for="si in sortedList" :key="si.id" :class="getRowClass(si)" :title="getTooltip(si)">
           <td>{{ si.id }}</td>
           <td>{{ si.tabNumber }}</td>
           <td>{{ si.name }}</td>
-          <td>{{ si.type || '-' }}</td>
-          <td>{{ si.location }}</td>
-          <td>{{ formatDate(si.lastVerificationDate) }}</td>
-          <td>{{ formatDate(si.nextVerificationDate) }}</td>
-          <td>{{ si.status }}</td>
-          <td>{{ si.verifier || '-' }}</td>
+          <td>{{ si.location || '-' }}</td>
           <td>
+            {{ getLastVerificationDate(si.id) ? formatDate(getLastVerificationDate(si.id)) : '-' }}
+          </td>
+          <td>
+            {{ getNextVerificationDate(si.id) ? formatDate(getNextVerificationDate(si.id)) : '-' }}
+          </td>
+          <td>{{ si.status }}</td>
+          <td class="actions-cell">
             <button class="btn btn-sm btn-secondary" @click="viewCard(si.id)">Просмотр</button>
             <button
               v-if="canEdit && si.status !== 'выведено'"
@@ -98,13 +80,13 @@
             <span v-if="si.status === 'выведено'" class="badge-disabled">Списан</span>
           </td>
         </tr>
-        <tr v-if="sortedList.length === 0">
-          <td colspan="10" style="text-align: center">Нет данных</td>
-        </tr>
-      </tbody>
-    </table>
 
-    <!-- Модальные окна -->
+        <tr v-if="sortedList.length === 0">
+          <td colspan="8" style="text-align: center">Нет данных</td>
+        </tr>
+      </table>
+    </div>
+
     <SIForm ref="siFormRef" @si-saved="refresh" />
     <VerificationForm ref="verFormRef" @verification-saved="refresh" />
     <ExportDialog ref="exportDialogRef" :data="sortedList" />
@@ -126,24 +108,21 @@ import { formatDate, getDaysUntilVerification } from '@/utils/dateUtils'
 const router = useRouter()
 const store = useSIStore()
 
-// Тип для ключей сортировки (все поля кроме действий)
 type SortableKey =
   | 'id'
   | 'tabNumber'
   | 'name'
-  | 'type'
   | 'location'
+  | 'status'
   | 'lastVerificationDate'
   | 'nextVerificationDate'
-  | 'status'
-  | 'verifier'
 
 const siFormRef = ref<InstanceType<typeof SIForm>>()
 const verFormRef = ref<InstanceType<typeof VerificationForm>>()
 const exportDialogRef = ref<InstanceType<typeof ExportDialog>>()
 const confirmDialog = ref<InstanceType<typeof ConfirmDialog>>()
 
-const filters = ref<FilterParams>({ search: '', status: '', verifier: '' })
+const filters = ref<FilterParams>({ search: '', status: '' })
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 const sortField = ref<SortableKey>('tabNumber')
 const sortDir = ref<'asc' | 'desc'>('asc')
@@ -155,33 +134,33 @@ const canEdit = computed(() => {
   return role === 'operator' || role === 'admin'
 })
 
-// ========== Приоритетная сортировка ==========
+function getLastVerificationDate(id: number): string {
+  return store.getLastVerificationDate(id)
+}
 
-// Функция для получения количества дней до поверки
+function getNextVerificationDate(id: number): string {
+  return store.getNextVerificationDate(id)
+}
+
 function getDaysLeft(si: MeasuringInstrument): number {
   if (si.status === 'выведено') return Infinity
-  const days = getDaysUntilVerification(si.nextVerificationDate)
+  const nextDate = getNextVerificationDate(si.id)
+  if (!nextDate) return Infinity
+  const days = getDaysUntilVerification(nextDate)
   return days
 }
 
-// Функция для определения приоритета сортировки
 function getPriority(si: MeasuringInstrument): number {
-  // Приоритет 0: просроченные (меньше 0 дней)
-  // Приоритет 1: менее 30 дней (жёлтые)
-  // Приоритет 2: нормальные (>30 дней)
-  // Приоритет 3: списанные
   if (si.status === 'выведено') return 3
   const daysLeft = getDaysLeft(si)
-  if (daysLeft < 0) return 0 // просроченные (красные)
-  if (daysLeft <= 30) return 1 // предупреждение (жёлтые)
-  return 2 // нормальные
+  if (daysLeft < 0) return 0
+  if (daysLeft <= 30) return 1
+  return 2
 }
 
-// Сортировка с приоритетами + сортировка внутри групп
 const sortedList = computed(() => {
   let list = [...store.instruments]
 
-  // Сначала сортируем по приоритету (группы)
   list.sort((a, b) => {
     const priorityA = getPriority(a)
     const priorityB = getPriority(b)
@@ -189,21 +168,37 @@ const sortedList = computed(() => {
       return priorityA - priorityB
     }
 
-    // Внутри одной группы применяем сортировку по выбранному полю
     const field = sortField.value
-    let valA = a[field]
-    let valB = b[field]
+    let valA: string | number = ''
+    let valB: string | number = ''
 
-    // Обработка undefined/null
-    if (valA === undefined || valA === null) valA = ''
-    if (valB === undefined || valB === null) valB = ''
+    if (field === 'id') {
+      valA = a.id
+      valB = b.id
+    } else if (field === 'tabNumber') {
+      valA = a.tabNumber || ''
+      valB = b.tabNumber || ''
+    } else if (field === 'name') {
+      valA = a.name || ''
+      valB = b.name || ''
+    } else if (field === 'location') {
+      valA = a.location || ''
+      valB = b.location || ''
+    } else if (field === 'status') {
+      valA = a.status || ''
+      valB = b.status || ''
+    } else if (field === 'lastVerificationDate') {
+      valA = getLastVerificationDate(a.id) || ''
+      valB = getLastVerificationDate(b.id) || ''
+    } else if (field === 'nextVerificationDate') {
+      valA = getNextVerificationDate(a.id) || ''
+      valB = getNextVerificationDate(b.id) || ''
+    }
 
-    // Числовое сравнение
     if (typeof valA === 'number' && typeof valB === 'number') {
       return sortDir.value === 'asc' ? valA - valB : valB - valA
     }
 
-    // Строковое сравнение
     const strA = String(valA).toLowerCase()
     const strB = String(valB).toLowerCase()
     if (strA < strB) return sortDir.value === 'asc' ? -1 : 1
@@ -214,7 +209,6 @@ const sortedList = computed(() => {
   return list
 })
 
-// Функция сортировки по клику на заголовок
 function sort(field: SortableKey) {
   if (sortField.value === field) {
     sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
@@ -224,12 +218,10 @@ function sort(field: SortableKey) {
   }
 }
 
-// ========== Фильтрация ==========
 function applyFilters() {
   store.setFilterParams({
     search: filters.value.search,
     status: filters.value.status as InstrumentStatus | '',
-    verifier: filters.value.verifier,
   })
 }
 
@@ -247,7 +239,7 @@ function onSearchInput() {
 }
 
 function resetFilters() {
-  filters.value = { search: '', status: '', verifier: '' }
+  filters.value = { search: '', status: '' }
   if (searchTimer) {
     clearTimeout(searchTimer)
     searchTimer = null
@@ -255,16 +247,14 @@ function resetFilters() {
   applyFilters()
 }
 
-// ========== Цветовые классы ==========
 function getRowClass(si: MeasuringInstrument): string {
   if (si.status === 'выведено') return 'disabled-row'
-  const days = getDaysUntilVerification(si.nextVerificationDate)
+  const days = getDaysLeft(si)
   if (days < 0) return 'expired-row'
   if (days <= 30) return 'warning-row'
   return ''
 }
 
-// ========== Всплывающие подсказки ==========
 function getDaysWord(days: number): string {
   const lastDigit = days % 10
   const lastTwoDigits = days % 100
@@ -278,7 +268,11 @@ function getTooltip(si: MeasuringInstrument): string {
   if (si.status === 'выведено') {
     return 'Прибор списан, не используется'
   }
-  const days = getDaysUntilVerification(si.nextVerificationDate)
+  const days = getDaysLeft(si)
+  const nextDate = getNextVerificationDate(si.id)
+  if (!nextDate) {
+    return 'Поверки ещё не проводились'
+  }
   if (days < 0) {
     const overdueDays = Math.abs(days)
     return `Поверка просрочена на ${overdueDays} ${getDaysWord(overdueDays)}! Необходимо срочно отправить на поверку!`
@@ -289,7 +283,6 @@ function getTooltip(si: MeasuringInstrument): string {
   return `Следующая поверка через ${days} ${getDaysWord(days)}`
 }
 
-// ========== Действия ==========
 function viewCard(id: number) {
   router.push(`/si/${id}`)
 }
@@ -304,11 +297,11 @@ function editSI(si: MeasuringInstrument) {
 
 async function writeOffSI(id: number) {
   const ok = await confirmDialog.value?.show(
-    'Списание',
-    'Вы уверены, что хотите списать это средство измерения?',
+    'Списание средства измерения',
+    'Вы уверены, что хотите списать это средство измерения?\n\nПосле списания прибор будет перемещён в конец списка и исключён из активных операций.',
   )
   if (ok) {
-    store.deleteInstrument(id)
+    store.writeOffInstrument(id)
   }
 }
 
@@ -317,7 +310,12 @@ function refresh() {
 }
 
 function openExportDialog() {
-  exportDialogRef.value?.open(sortedList.value)
+  const enrichedData = sortedList.value.map((si) => ({
+    ...si,
+    lastVerificationDate: getLastVerificationDate(si.id),
+    nextVerificationDate: getNextVerificationDate(si.id),
+  }))
+  exportDialogRef.value?.open(enrichedData)
 }
 
 onMounted(() => {
@@ -330,12 +328,10 @@ onMounted(() => {
   display: flex;
   gap: 10px;
 }
-
 .btn-fixed {
   min-width: 140px;
   text-align: center;
 }
-
 .badge-disabled {
   display: inline-block;
   padding: 4px 8px;
@@ -344,24 +340,24 @@ onMounted(() => {
   border-radius: 4px;
   font-size: 12px;
 }
-
-/* Строка с предупреждением (менее 30 дней) */
+.actions-cell {
+  white-space: nowrap;
+}
+.actions-cell .btn {
+  margin-right: 4px;
+}
 .warning-row {
   background-color: #fff3e0;
 }
 .warning-row:hover {
   background-color: #ffe8c7;
 }
-
-/* Строка с просроченной поверкой */
 .expired-row {
   background-color: #ffe0e0;
 }
 .expired-row:hover {
   background-color: #ffd0d0;
 }
-
-/* Строка со списанным прибором */
 .disabled-row {
   background-color: #f0f0f0;
   color: #999;

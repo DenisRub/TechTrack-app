@@ -4,16 +4,13 @@ export interface MeasuringInstrument {
   id: number
   tabNumber: string
   name: string
-  type?: string
+  nodeId?: number
   verificationInterval: number
-  lastVerificationDate: string
-  nextVerificationDate: string
   status: InstrumentStatus
   location: string
   verifier?: string
   additionalData?: any
   isDeleted: boolean
-  nodeId?: number
 }
 
 export interface Verification {
@@ -29,6 +26,4 @@ export interface Verification {
 export interface FilterParams {
   search?: string
   status?: InstrumentStatus | ''
-  verifier?: string
-  daysToVerification?: number
 }

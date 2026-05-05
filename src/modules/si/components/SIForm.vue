@@ -3,41 +3,19 @@
     <div class="modal-content">
       <div class="modal-header">{{ isEdit ? 'Редактирование СИ' : 'Добавление СИ' }}</div>
 
+      <!-- Табельный номер -->
       <div class="form-group">
         <label>Табельный номер*</label>
         <input type="text" v-model="form.tabNumber" class="form-control" />
       </div>
 
+      <!-- Наименование -->
       <div class="form-group">
         <label>Наименование*</label>
         <input type="text" v-model="form.name" class="form-control" />
       </div>
 
-      <div class="form-group">
-        <label>Тип</label>
-        <input type="text" v-model="form.type" class="form-control" />
-      </div>
-
-      <div class="form-group">
-        <label>Межповерочный интервал (лет)*</label>
-        <input type="number" step="0.5" v-model="form.verificationInterval" class="form-control" />
-      </div>
-
-      <div class="form-group">
-        <label>Дата последней поверки*</label>
-        <input type="date" v-model="form.lastVerificationDate" class="form-control" />
-      </div>
-
-      <div class="form-group">
-        <label>Статус</label>
-        <select v-model="form.status" class="form-control">
-          <option value="в эксплуатации">В эксплуатации</option>
-          <option value="на поверке">На поверке</option>
-          <option value="в ремонте">В ремонте</option>
-          <option value="выведено">Выведено</option>
-        </select>
-      </div>
-
+      <!-- Местоположение -->
       <div class="form-group">
         <label>Местоположение</label>
         <div style="display: flex; gap: 8px">
@@ -49,6 +27,23 @@
             + Добавить
           </button>
         </div>
+      </div>
+
+      <!-- Межповерочный интервал -->
+      <div class="form-group">
+        <label>Межповерочный интервал (лет)*</label>
+        <input type="number" step="0.5" v-model="form.verificationInterval" class="form-control" />
+      </div>
+
+      <!-- Статус -->
+      <div class="form-group">
+        <label>Статус</label>
+        <select v-model="form.status" class="form-control">
+          <option value="в эксплуатации">В эксплуатации</option>
+          <option value="на поверке">На поверке</option>
+          <option value="в ремонте">В ремонте</option>
+          <option value="выведено">Выведено</option>
+        </select>
       </div>
 
       <div v-if="error" class="error-text">{{ error }}</div>
@@ -156,32 +151,50 @@ function addNewLocation() {
 const form = reactive<{
   tabNumber: string
   name: string
-  type: string
   verificationInterval: number
-  lastVerificationDate: string
   status: 'в эксплуатации' | 'на поверке' | 'в ремонте' | 'выведено'
   location: string
-  verifier: string
 }>({
   tabNumber: '',
   name: '',
-  type: '',
   verificationInterval: 1,
-  lastVerificationDate: '',
   status: 'в эксплуатации',
   location: '',
-  verifier: '',
 })
+
+// Функция для получения текущей даты в формате YYYY-MM-DD
+function getCurrentDate(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// Функция для получения последней даты поверки из истории
+function getLastVerificationDate(siId?: number): string {
+  if (!siId) {
+    return '' // Пустая строка вместо текущей даты
+  }
+
+  const verifications = store.getVerificationsForSI(siId)
+  const lastGoodVerification = verifications
+    .filter((v) => v.result === 'годен')
+    .sort((a, b) => new Date(b.receiptDate).getTime() - new Date(a.receiptDate).getTime())[0]
+
+  if (lastGoodVerification && lastGoodVerification.receiptDate) {
+    return lastGoodVerification.receiptDate
+  }
+
+  return '' // Пустая строка, если нет поверок
+}
 
 function resetForm() {
   form.tabNumber = ''
   form.name = ''
-  form.type = ''
   form.verificationInterval = 1
-  form.lastVerificationDate = ''
   form.status = 'в эксплуатации'
   form.location = ''
-  form.verifier = ''
   error.value = ''
   isEdit.value = false
   editId.value = null
@@ -194,12 +207,9 @@ function open(editItem?: MeasuringInstrument) {
     editId.value = editItem.id
     form.tabNumber = editItem.tabNumber
     form.name = editItem.name
-    form.type = editItem.type || ''
     form.verificationInterval = editItem.verificationInterval
-    form.lastVerificationDate = editItem.lastVerificationDate
     form.status = editItem.status
     form.location = editItem.location || ''
-    form.verifier = editItem.verifier || ''
   }
   visible.value = true
 }
@@ -221,10 +231,6 @@ function validate(): boolean {
     error.value = 'Интервал должен быть >0'
     return false
   }
-  if (!form.lastVerificationDate) {
-    error.value = 'Укажите дату последней поверки'
-    return false
-  }
   if (!form.location) {
     error.value = 'Выберите местоположение'
     return false
@@ -235,17 +241,20 @@ function validate(): boolean {
 
 function save() {
   if (!validate()) return
+
+  // Получаем дату последней поверки автоматически из истории
+  const lastVerificationDate = getLastVerificationDate(editId.value || undefined)
+
   const data = {
     tabNumber: form.tabNumber,
     name: form.name,
-    type: form.type,
     verificationInterval: form.verificationInterval,
-    lastVerificationDate: form.lastVerificationDate,
+    lastVerificationDate: lastVerificationDate,
     status: form.status,
     location: form.location,
-    verifier: form.verifier,
     isDeleted: false,
   }
+
   if (isEdit.value && editId.value) {
     store.updateInstrument(editId.value, data)
   } else {
