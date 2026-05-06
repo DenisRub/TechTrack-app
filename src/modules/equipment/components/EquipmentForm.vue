@@ -3,6 +3,7 @@
     <div class="modal-content" style="width: 750px;">
       <div class="modal-header">{{ isEdit ? 'Редактирование узла' : 'Добавление узла' }}</div>
 
+
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
         <div>
           <div class="form-group">

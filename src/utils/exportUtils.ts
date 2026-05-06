@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 
-export function exportToExcel(data: any[], filename: string) {
+export function exportToExcel(data: any[], filename: string, title?: string) {
   const ws = XLSX.utils.json_to_sheet(data)
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'СИ')
@@ -10,7 +10,7 @@ export function exportToExcel(data: any[], filename: string) {
   saveAs(blob, `${filename}.xlsx`)
 }
 
-export function exportToWord(data: any[], columns: string[], filename: string) {
+export function exportToWord(data: any[], columns: string[], filename: string, title?: string) {
   let html = `<html><head><meta charset="UTF-8"><title>${filename}</title></head><body>`
   html += `<h1>${filename}</h1>`
   html += `<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse;">`

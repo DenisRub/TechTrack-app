@@ -2,67 +2,91 @@
   <div class="card">
     <div style="display: flex; justify-content: space-between; margin-bottom: 20px">
       <h2>Оборудование</h2>
-      <div class="action-buttons">
-        <button v-if="canEdit" class="btn btn-primary" @click="openForm">+ Добавить</button>
-        <button class="btn btn-secondary" @click="exportToExcelFile">📎 Excel</button>
-        <button class="btn btn-secondary" @click="exportToWordFile">📄 Word</button>
+      <div class="button-group">
+        <div class="dropdown">
+          <button class="btn btn-secondary" @click="toggleDropdown">📎 Экспорт</button>
+          <div v-if="dropdownOpen" class="dropdown-menu">
+            <button class="dropdown-item" @click="exportToExcelFile">Microsoft Excel (.xlsx)</button>
+            <button class="dropdown-item" @click="exportToWordFile">Microsoft Word (.docx)</button>
+          </div>
+        </div>
         <button class="btn btn-secondary" @click="showColumnSettings = true">⚙️ Колонки</button>
-        <button class="btn btn-secondary" @click="openAdvancedFilter">🔍 Расш. фильтр</button>
+        <button class="btn btn-secondary" @click="showFilterPanel = !showFilterPanel">🔍 Расш. фильтр</button>
+        <button v-if="canEdit" class="btn btn-primary" @click="openAddForm">+ Добавить</button>
       </div>
     </div>
 
-    <!-- Панель быстрых фильтров -->
-    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px">
+    <!-- Быстрая фильтрация -->
+    <div class="quick-filters">
       <input
-        v-model="quickFilters.search"
+        v-model="quickSearch"
         type="text"
         placeholder="Поиск по наименованию"
         class="form-control"
         style="width: 250px"
         @input="applyQuickFilters"
       />
-      <select
-        v-model="quickFilters.type"
-        class="form-control"
-        style="width: 150px"
-        @change="applyQuickFilters"
-      >
+      <select v-model="quickType" class="form-control" style="width: 150px" @change="applyQuickFilters">
         <option value="">Все типы</option>
         <option value="aggregate">Агрегаты</option>
         <option value="block">Блоки</option>
       </select>
-      <button class="btn btn-secondary" @click="resetFilters">Сбросить</button>
+      <button class="btn btn-secondary" @click="resetAllFilters">Сбросить</button>
     </div>
-    <div class="table-wrapper">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th v-for="col in visibleCols" :key="col.key" @click="handleSort(col.key, $event)">
-              {{ col.label }}
-              <span v-if="getSortIcon(col.key)">{{ getSortIcon(col.key) }}</span>
-            </th>
-            <th>Действия</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="node in filteredAndSortedNodes" :key="node.id">
-            <td v-for="col in visibleCols" :key="col.key">{{ formatCell(node, col.key) }}</td>
-            <td>
-              <button class="btn btn-sm btn-secondary" @click="viewCard(node.id)">Просмотр</button>
-              <button v-if="canEdit" class="btn btn-sm btn-secondary" @click="editNode(node)">
-                ✏️
-              </button>
-              <button v-if="canEdit" class="btn btn-sm btn-danger" @click="deleteNode(node.id)">
-                Списать
-              </button>
-            </td>
-          </tr>
-          <tr v-if="filteredAndSortedNodes.length === 0">
-            <td :colspan="visibleCols.length + 1">Нет данных</td>
-          </tr>
-        </tbody>
-      </table>
+
+    <!-- Расширенная панель фильтрации -->
+    <div v-if="showFilterPanel" class="filter-panel">
+      <div class="filter-row">
+        <select v-model="newFilter.field" class="form-control">
+          <option value="">-- Выберите поле --</option>
+          <option v-for="col in allColumns" :key="col.key" :value="col.key">{{ col.label }}</option>
+        </select>
+        <select v-model="newFilter.operator" class="form-control">
+          <option value="contains">Содержит</option>
+          <option value="equals">Равно</option>
+          <option value="greater">Больше</option>
+          <option value="less">Меньше</option>
+        </select>
+        <input v-model="newFilter.value" type="text" placeholder="Значение" class="form-control" />
+        <button class="btn btn-primary btn-sm" @click="addFilter">Найти</button>
+      </div>
+      <div class="filter-list" v-if="filters.length">
+        <span v-for="(f, idx) in filters" :key="idx" class="filter-tag">
+          {{ getFieldLabel(f.field) }} {{ getOperatorLabel(f.operator) }} "{{ f.value }}"
+          <button class="filter-remove" @click="removeFilter(idx)">✖</button>
+        </span>
+        <button class="btn btn-sm btn-secondary" @click="clearFilters">Сбросить все</button>
+      </div>
     </div>
+
+    <!-- Таблица -->
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th v-for="col in visibleColumns" :key="col.key" @click="handleSort(col.key, $event)">
+            {{ col.label }}
+            <span v-if="getSortIcon(col.key)">{{ getSortIcon(col.key) }}</span>
+          </th>
+          <th>Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="node in filteredAndSortedNodes" :key="node.id" :class="{ 'disabled-row': node.isDeleted }">
+          <td v-for="col in visibleColumns" :key="col.key">{{ formatCell(node, col.key) }}</td>
+          <td>
+            <button class="btn btn-sm btn-secondary" @click="viewCard(node.id)">Просмотр</button>
+            <template v-if="!node.isDeleted">
+              <button v-if="canEdit" class="btn btn-sm btn-secondary" @click="editNode(node)">✏️</button>
+              <button v-if="canEdit" class="btn btn-sm btn-danger" @click="deleteNode(node.id)">Списать</button>
+            </template>
+            <span v-else class="badge-disabled">Списан</span>
+          </td>
+        </tr>
+        <tr v-if="filteredAndSortedNodes.length === 0">
+          <td :colspan="visibleColumns.length + 1">Нет данных</td>
+        </tr>
+      </tbody>
+    </table>
 
     <!-- Модальное окно настройки колонок -->
     <div class="modal-overlay" v-if="showColumnSettings">
@@ -79,211 +103,33 @@
       </div>
     </div>
 
-    <!-- Модальные окна -->
     <EquipmentForm ref="formRef" @saved="refresh" />
     <ConfirmDialog ref="confirmDialog" />
-    <AdvancedFilter ref="advancedFilterRef" @apply="applyAdvancedFilters" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { useEquipmentStore } from '../stores/equipmentStore'
-import EquipmentForm from './EquipmentForm.vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import AdvancedFilter from './AdvancedFilter.vue'
-import { exportToExcel, exportToWord } from '@/utils/exportUtils'
-import type { EquipmentNode } from '../types/equipmentTypes'
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { useEquipmentStore } from '../stores/equipmentStore';
+import EquipmentForm from './EquipmentForm.vue';
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
+import { exportToExcel as exportToExcelUtil, exportToWord as exportToWordUtil } from '@/utils/exportUtils';
 
-type SortableKey = keyof Pick<
-  EquipmentNode,
-  'id' | 'name' | 'type' | 'location' | 'createdAt' | 'updatedAt'
->
+const router = useRouter();
+const store = useEquipmentStore();
+const formRef = ref();
+const confirmDialog = ref();
 
-const router = useRouter()
-const store = useEquipmentStore()
-const formRef = ref()
-const confirmDialog = ref()
-const advancedFilterRef = ref()
+// ========== Быстрые фильтры ==========
+const quickSearch = ref('');
+const quickType = ref('');
 
-// ---------- Быстрые фильтры (поиск, тип) ----------
-const quickFilters = ref({ search: '', type: '' })
 function applyQuickFilters() {
-  // Передаём в store для первичной фильтрации
-  store.setFilterParams(quickFilters.value)
-}
-function resetFilters() {
-  quickFilters.value = { search: '', type: '' }
-  advancedConditions.value = []
-  applyQuickFilters()
+  // триггер обновления computed
 }
 
-// ---------- Расширенный фильтр (условия) ----------
-const advancedConditions = ref<any[]>([])
-function openAdvancedFilter() {
-  advancedFilterRef.value?.open()
-}
-function applyAdvancedFilters(conditions: any[]) {
-  advancedConditions.value = conditions
-}
-
-// ---------- Сортировка по нескольким полям ----------
-const sortStack = ref<{ field: SortableKey; order: 'asc' | 'desc' }[]>([
-  { field: 'id', order: 'asc' },
-])
-
-function handleSort(field: string, event: MouseEvent) {
-  const fieldKey = field as SortableKey
-  if (event.shiftKey) {
-    // Добавляем поле в сортировку
-    const existing = sortStack.value.find((s) => s.field === fieldKey)
-    if (existing) {
-      existing.order = existing.order === 'asc' ? 'desc' : 'asc'
-    } else {
-      sortStack.value.push({ field: fieldKey, order: 'asc' })
-    }
-  } else {
-    // Одиночная сортировка – заменяем стек
-    const existing = sortStack.value.find((s) => s.field === fieldKey)
-    if (existing && sortStack.value.length === 1) {
-      existing.order = existing.order === 'asc' ? 'desc' : 'asc'
-    } else {
-      sortStack.value = [{ field: fieldKey, order: 'asc' }]
-    }
-  }
-}
-function getSortIcon(field: string): string {
-  const entry = sortStack.value.find((s) => s.field === field)
-  if (!entry) return ''
-  return entry.order === 'asc' ? '↑' : '↓'
-}
-
-// ---------- Основная логика фильтрации и сортировки ----------
-const filteredAndSortedNodes = computed(() => {
-  // Берём из store уже отфильтрованный по быстрым фильтрам список
-  let list = [...store.nodes]
-
-  // Применяем расширенные условия
-  if (advancedConditions.value.length) {
-    list = list.filter((node) => {
-      return advancedConditions.value.every((cond) => {
-        const val = (node as any)[cond.field]
-        if (val === undefined || val === null) return false
-        switch (cond.operator) {
-          case 'eq':
-            return String(val).toLowerCase() === cond.value.toLowerCase()
-          case 'contains':
-            return String(val).toLowerCase().includes(cond.value.toLowerCase())
-          case 'gt':
-            return Number(val) > Number(cond.value)
-          case 'lt':
-            return Number(val) < Number(cond.value)
-          default:
-            return true
-        }
-      })
-    })
-  }
-
-  // Множественная сортировка
-  if (sortStack.value.length) {
-    list.sort((a, b) => {
-      for (const sort of sortStack.value) {
-        let valA: any = a[sort.field]
-        let valB: any = b[sort.field]
-        if (valA === undefined || valA === null) valA = ''
-        if (valB === undefined || valB === null) valB = ''
-        if (typeof valA === 'string') valA = valA.toLowerCase()
-        if (typeof valB === 'string') valB = valB.toLowerCase()
-        if (valA < valB) return sort.order === 'asc' ? -1 : 1
-        if (valA > valB) return sort.order === 'asc' ? 1 : -1
-      }
-      return 0
-    })
-  }
-  return list
-})
-
-// ---------- Остальные методы ----------
-function formatCell(node: EquipmentNode, key: string) {
-  if (key === 'type') return node.type === 'aggregate' ? 'Агрегат' : 'Блок'
-  if (key === 'isSI') return node.isSI ? 'да' : 'нет'
-  const val = (node as any)[key]
-  return val ?? '-'
-}
-const canEdit = computed(() => {
-  const user = localStorage.getItem('user')
-  if (!user) return false
-  try {
-    const role = JSON.parse(user).role
-    return role === 'operator' || role === 'admin'
-  } catch {
-    return false
-  }
-})
-
-function openForm() {
-  formRef.value?.open()
-}
-function editNode(node: EquipmentNode) {
-  formRef.value?.open(node)
-}
-async function deleteNode(id: number) {
-  const ok = await confirmDialog.value?.show('Списание', 'Списать узел?')
-  if (ok) store.deleteNode(id)
-}
-function viewCard(id: number) {
-  router.push(`/equipment/${id}`)
-}
-function refresh() {
-  applyQuickFilters()
-}
-
-// ---------- Экспорт ----------
-function getExportData() {
-  return store.nodes.map((n) => ({
-    Подсистема: n.subsystem || '',
-    Наименование: n.name,
-    Тип: n.type === 'aggregate' ? 'Агрегат' : 'Блок',
-    Производитель: n.manufacturer || '',
-    Марка: n.model || '',
-    'Зав. №': n.serialNumber || '',
-    'Инв. №': n.inventoryNumber || '',
-    СИ: n.isSI ? 'да' : 'нет',
-    Состояние: n.condition || '',
-    Ресурс: n.resource || '',
-    Размещение: n.location || '',
-    Примечание: n.note || '',
-  }))
-}
-function exportToExcelFile() {
-  const data = getExportData()
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  const hours = String(now.getHours()).padStart(2, '0')
-  const minutes = String(now.getMinutes()).padStart(2, '0')
-  const seconds = String(now.getSeconds()).padStart(2, '0')
-  const filename = `Оборудование_${year}-${month}-${day}_${hours}-${minutes}-${seconds}`
-  exportToExcel(data, filename)
-}
-function exportToWordFile() {
-  const data = getExportData()
-  const headers = Object.keys(data[0] || {})
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  const hours = String(now.getHours()).padStart(2, '0')
-  const minutes = String(now.getMinutes()).padStart(2, '0')
-  const seconds = String(now.getSeconds()).padStart(2, '0')
-  const filename = `Оборудование_${year}-${month}-${day}_${hours}-${minutes}-${seconds}`
-  exportToWord(data, headers, filename)
-}
-
-// ---------- Настройка колонок ----------
+// ========== Колонки ==========
 const allColumns = [
   { key: 'subsystem', label: 'Подсистема' },
   { key: 'name', label: 'Наименование' },
@@ -297,28 +143,307 @@ const allColumns = [
   { key: 'resource', label: 'Ресурс' },
   { key: 'location', label: 'Размещение' },
   { key: 'note', label: 'Примечание' },
-]
-const selectedColumns = ref([
-  'subsystem',
-  'name',
-  'type',
-  'manufacturer',
-  'model',
-  'serialNumber',
-  'inventoryNumber',
-  'condition',
-  'location',
-])
-const showColumnSettings = ref(false)
-const visibleCols = computed(() => allColumns.filter((c) => selectedColumns.value.includes(c.key)))
+];
+const selectedColumns = ref(allColumns.map(c => c.key));
+const showColumnSettings = ref(false);
+const visibleColumns = computed(() => allColumns.filter(c => selectedColumns.value.includes(c.key)));
 
-// Инициализация
-applyQuickFilters()
+// ========== Расширенный фильтр ==========
+const showFilterPanel = ref(false);
+const filters = ref<{ field: string; operator: string; value: string }[]>([]);
+const newFilter = ref({ field: '', operator: 'contains', value: '' });
+const dropdownOpen = ref(false);
+
+function getFieldLabel(field: string): string {
+  const found = allColumns.find(c => c.key === field);
+  return found ? found.label : field;
+}
+function getOperatorLabel(op: string): string {
+  const labels: Record<string, string> = {
+    contains: 'содержит',
+    equals: 'равно',
+    greater: 'больше',
+    less: 'меньше',
+  };
+  return labels[op] || op;
+}
+function addFilter() {
+  if (!newFilter.value.field || !newFilter.value.value) return;
+  filters.value.push({ ...newFilter.value });
+  newFilter.value = { field: '', operator: 'contains', value: '' };
+}
+function removeFilter(idx: number) { filters.value.splice(idx, 1); }
+function clearFilters() { filters.value = []; }
+function resetAllFilters() {
+  quickSearch.value = '';
+  quickType.value = '';
+  filters.value = [];
+  sortStack.value = [{ field: 'name', order: 'asc' }];
+  applyQuickFilters();
+}
+
+// ========== Получение значения поля для узла ==========
+function getNodeFieldValue(node: any, field: string): any {
+  switch (field) {
+    case 'subsystem': return node.subsystem || '';
+    case 'type': return node.type === 'aggregate' ? 'Агрегат' : 'Блок';
+    case 'manufacturer': return node.manufacturer || '';
+    case 'model': return node.model || '';
+    case 'serialNumber': return node.serialNumber || '';
+    case 'inventoryNumber': return node.inventoryNumber || '';
+    case 'isSI': return node.isSI ? 'Да' : 'Нет';
+    case 'condition': return node.condition || '';
+    case 'resource': return node.resource || '';
+    case 'location': return node.location || '';
+    case 'note': return node.note || '';
+    default: return (node as any)[field] || '';
+  }
+}
+
+// ========== Сортировка ==========
+type SortItem = { field: string; order: 'asc' | 'desc' };
+const sortStack = ref<SortItem[]>([{ field: 'name', order: 'asc' }]);
+
+function handleSort(field: string, event: MouseEvent) {
+  if (event.shiftKey) {
+    const existing = sortStack.value.find(s => s.field === field);
+    if (existing) existing.order = existing.order === 'asc' ? 'desc' : 'asc';
+    else sortStack.value.push({ field, order: 'asc' });
+  } else {
+    const existing = sortStack.value.find(s => s.field === field);
+    if (existing && sortStack.value.length === 1) existing.order = existing.order === 'asc' ? 'desc' : 'asc';
+    else sortStack.value = [{ field, order: 'asc' }];
+  }
+}
+function getSortIcon(field: string): string {
+  const entry = sortStack.value.find(s => s.field === field);
+  if (!entry) return '';
+  return entry.order === 'asc' ? '↑' : '↓';
+}
+
+// ========== Фильтрация и сортировка данных (со списанными в конце) ==========
+const filteredAndSortedNodes = computed(() => {
+  let list = [...store.allNodes]; // все узлы, включая списанные (allNodes должен быть определён в store)
+
+  // Быстрые фильтры
+  if (quickSearch.value) {
+    const s = quickSearch.value.toLowerCase();
+    list = list.filter(n => n.name.toLowerCase().includes(s));
+  }
+  if (quickType.value) {
+    list = list.filter(n => n.type === quickType.value);
+  }
+
+  // Расширенные фильтры
+  for (const filter of filters.value) {
+    list = list.filter(node => {
+      let value = getNodeFieldValue(node, filter.field);
+      if (value === undefined || value === null) value = '';
+      const strValue = String(value).toLowerCase();
+      const filterValue = filter.value.toLowerCase();
+
+      switch (filter.operator) {
+        case 'contains': return strValue.includes(filterValue);
+        case 'equals': return strValue === filterValue;
+        case 'greater': return parseFloat(strValue) > parseFloat(filterValue);
+        case 'less': return parseFloat(strValue) < parseFloat(filterValue);
+        default: return true;
+      }
+    });
+  }
+
+  // Сортировка: списанные в конец, затем по sortStack
+  list.sort((a, b) => {
+    // Сначала разделяем активные и списанные
+    if (a.isDeleted !== b.isDeleted) {
+      return a.isDeleted ? 1 : -1; // списанные (true) в конец
+    }
+    // Для одинакового статуса сортируем по полям из sortStack
+    for (const sort of sortStack.value) {
+      let valA = getNodeFieldValue(a, sort.field);
+      let valB = getNodeFieldValue(b, sort.field);
+      if (valA === undefined || valA === null) valA = '';
+      if (valB === undefined || valB === null) valB = '';
+      if (typeof valA === 'string') valA = valA.toLowerCase();
+      if (typeof valB === 'string') valB = valB.toLowerCase();
+      if (valA < valB) return sort.order === 'asc' ? -1 : 1;
+      if (valA > valB) return sort.order === 'asc' ? 1 : -1;
+    }
+    return 0;
+  });
+
+  return list;
+});
+
+function formatCell(node: any, key: string): string {
+  const value = getNodeFieldValue(node, key);
+  return value === undefined || value === null ? '-' : String(value);
+}
+
+// ========== Права доступа ==========
+const canEdit = computed(() => {
+  const user = localStorage.getItem('user');
+  if (!user) return false;
+  const role = JSON.parse(user).role;
+  return role === 'operator' || role === 'admin';
+});
+
+// ========== CRUD (списание с сохранением истории через store) ==========
+function openAddForm() { formRef.value?.open(); }
+function editNode(node: any) { formRef.value?.open(node); }
+async function deleteNode(id: number) {
+  const ok = await confirmDialog.value?.show('Списание', 'Списать узел?');
+  if (ok) {
+    store.deleteNode(id); // внутри store вызывается logAction, история сохраняется
+  }
+}
+function viewCard(id: number) { router.push(`/equipment/${id}`); }
+function refresh() { /* реактивно, достаточно вызова applyQuickFilters */ }
+
+// ========== Экспорт ==========
+function getExportData() {
+  return filteredAndSortedNodes.value.map(node => {
+    const row: any = {};
+    for (const col of visibleColumns.value) {
+      row[col.label] = getNodeFieldValue(node, col.key);
+    }
+    return row;
+  });
+}
+
+function getExportTitle(): string {
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  return `Оборудование (от ${dateStr})`;
+}
+
+function exportToExcelFile() {
+  const data = getExportData();
+  if (data.length === 0) {
+    alert('Нет данных для экспорта');
+    return;
+  }
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const filename = `Оборудование_${dateStr}`;
+  const title = getExportTitle();
+  exportToExcelUtil(data, filename, title);
+  dropdownOpen.value = false;
+}
+
+function exportToWordFile() {
+  const data = getExportData();
+  if (data.length === 0) {
+    alert('Нет данных для экспорта');
+    return;
+  }
+  const headers = Object.keys(data[0] || {});
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const filename = `Оборудование_${dateStr}`;
+  const title = getExportTitle();
+  exportToWordUtil(data, headers, filename, title);
+  dropdownOpen.value = false;
+}
+
+function toggleDropdown() { dropdownOpen.value = !dropdownOpen.value; }
+function handleClickOutside(event: MouseEvent) {
+  const target = event.target as HTMLElement;
+  if (!target.closest('.dropdown')) dropdownOpen.value = false;
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside);
+});
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside);
+});
 </script>
 
 <style scoped>
-.action-buttons {
+.button-group {
   display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  position: relative;
+}
+.dropdown { position: relative; }
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid #e0e4e8;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  z-index: 100;
+  min-width: 220px;
+}
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+}
+.dropdown-item:hover { background-color: #f0f2f5; }
+.quick-filters {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+.filter-panel {
+  background: #f8f9fa;
+  border: 1px solid #e0e4e8;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+.filter-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.filter-row .form-control { width: auto; min-width: 150px; }
+.filter-list {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
+}
+.filter-tag {
+  background: #e9ecef;
+  padding: 4px 8px;
+  border-radius: 16px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.filter-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #c0392b;
+  font-weight: bold;
+}
+.disabled-row {
+  background-color: #f0f0f0;
+  color: #999;
+  opacity: 0.7;
+}
+.badge-disabled {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #e9ecef;
+  color: #6c757d;
+  border-radius: 4px;
+  font-size: 12px;
 }
 </style>

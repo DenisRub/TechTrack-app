@@ -35,7 +35,8 @@ export interface Resource {
 export interface NodeType {
   id: number;
   name: string;
-  characteristicsTemplate: Record<string, any>; // шаблон характеристик JSON
+  characteristicsTemplate: Record<string, any>;
+  allowedChildTypeIds?: number[]; // ID видов, которые можно устанавливать
   createdAt: string;
   updatedAt: string;
 }

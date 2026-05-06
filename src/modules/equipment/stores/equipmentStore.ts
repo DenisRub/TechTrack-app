@@ -2,6 +2,25 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { EquipmentNode, Resource, NodeType } from '../types/equipmentTypes';
 
+
+const STORAGE_KEY = 'equipment_nodes';
+
+function loadFromStorage(): EquipmentNode[] {
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch (e) {
+      console.error('Ошибка загрузки из localStorage', e);
+    }
+  }
+  return []; // вернём пустой массив, если ничего нет
+}
+
+function saveToStorage(data: EquipmentNode[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
 function getCurrentDate(): string {
   const now = new Date();
   const year = now.getFullYear();
@@ -339,6 +358,7 @@ const mockNodeTypes: NodeType[] = [
       тип: { value: '', unit: '', isMain: true }, 
       чувствительность: { value: '', unit: 'мкЗв/с', isMain: true }, 
       диапазон: { value: '', unit: 'мкЗв/ч', isMain: false } 
+    
     }, 
     createdAt: '2024-01-01', 
     updatedAt: '2024-01-01' 
@@ -413,34 +433,40 @@ const mockNodeTypes: NodeType[] = [
 
 export const useEquipmentStore = defineStore('equipment', () => {
   // ========== Основные данные ==========
-  const nodes = ref<EquipmentNode[]>([...mockNodes]);
-  const resources = ref<Resource[]>([...mockResources]);
+ const saved = loadFromStorage();
+const nodes = ref<EquipmentNode[]>(saved.length ? saved : [...mockNodes]); const resources = ref<Resource[]>([...mockResources]);
   const nodeTypes = ref<NodeType[]>([...mockNodeTypes]);
+  const allNodes = computed(() => nodes.value); // все узлы, включая списанные
+const activeNodes = computed(() => nodes.value.filter(n => !n.isDeleted));
 
+
+// Для дерева используем activeNodes
+const tree = computed(() => {
+  const build = (parentId: number | null): any[] => {
+    return activeNodes.value
+      .filter(n => n.parentId === parentId)
+      .map(n => ({ ...n, children: build(n.id) }));
+  };
+  return build(null);
+});
+
+// Фильтрация (поиск, тип) остаётся для активных узлов (для совместимости)
+const filteredNodes = computed(() => {
+  let list = activeNodes.value;
+  const { search, type } = filterParams.value;
+  if (search) {
+    const s = search.toLowerCase();
+    list = list.filter(n => n.name.toLowerCase().includes(s));
+  }
+  if (type) {
+    list = list.filter(n => n.type === type);
+  }
+  return list;
+});
   // ========== Фильтрация ==========
   const filterParams = ref({ search: '', type: '' });
 
   const flatList = computed(() => nodes.value.filter(n => !n.isDeleted));
-
-  const filteredNodes = computed(() => {
-    let list = flatList.value;
-    const { search, type } = filterParams.value;
-    if (search) {
-      const s = search.toLowerCase();
-      list = list.filter(n => n.name.toLowerCase().includes(s));
-    }
-    if (type) list = list.filter(n => n.type === type);
-    return list;
-  });
-
-  const tree = computed(() => {
-    const build = (parentId: number | null): any[] => {
-      return flatList.value
-        .filter(n => n.parentId === parentId)
-        .map(n => ({ ...n, children: build(n.id) }));
-    };
-    return build(null);
-  });
 
   // ========== Журнал действий ==========
   const auditLog = ref<{ timestamp: string; user: string; action: string; details: string }[]>([]);
@@ -465,18 +491,19 @@ export const useEquipmentStore = defineStore('equipment', () => {
   }
 
   function addNode(node: Omit<EquipmentNode, 'id' | 'createdAt' | 'updatedAt' | 'isDeleted'>) {
-    const newId = Math.max(...nodes.value.map(n => n.id), 0) + 1;
-    const now = getCurrentDate();
-    const newNode: EquipmentNode = {
-      ...node,
-      id: newId,
-      createdAt: now,
-      updatedAt: now,
-      isDeleted: false,
-    };
-    nodes.value.push(newNode);
-    logAction('Создание узла', `Узел "${node.name}" (ID ${newId})`);
-  }
+  const newId = Math.max(...nodes.value.map(n => n.id), 0) + 1;
+  const now = getCurrentDate();
+  const newNode: EquipmentNode = {
+    ...node,
+    id: newId,
+    createdAt: now,
+    updatedAt: now,
+    isDeleted: false,
+  };
+  nodes.value.push(newNode);
+  saveToStorage(nodes.value); // <-- добавить эту строку
+  logAction('Создание узла', `Узел "${node.name}" (ID ${newId})`);
+}
 
   function updateNode(id: number, data: Partial<EquipmentNode>) {
     const idx = nodes.value.findIndex(n => n.id === id);
@@ -492,14 +519,14 @@ export const useEquipmentStore = defineStore('equipment', () => {
     logAction('Редактирование узла', `Узел ID ${id}, было: "${oldName}", стало: "${nodes.value[idx].name}"`);
   }
 
-  function deleteNode(id: number) {
+ function deleteNode(id: number) {
     const node = nodes.value.find(n => n.id === id);
     if (node && !node.isDeleted) {
       node.isDeleted = true;
+      saveToStorage(nodes.value);
       logAction('Списание узла', `Узел "${node.name}" (ID ${id}) помечен как удалённый`);
     }
   }
-
   // ========== Перемещения ==========
   const moveHistory = ref<{ id: number; nodeId: number; fromLocation: string; toLocation: string; date: string; userId: string }[]>([]);
   function addMoveRecord(nodeId: number, fromLocation: string, toLocation: string) {
@@ -569,6 +596,8 @@ export const useEquipmentStore = defineStore('equipment', () => {
     if (child && child.parentId !== parentId) {
       const oldParent = child.parentId;
       child.parentId = parentId;
+      saveToStorage(nodes.value);
+      logAction('Добавление в состав', `...`);
       addCompositionRecord(parentId, childId, 'add');
       logAction('Добавление в состав', `Узел "${child.name}" (ID ${childId}) добавлен в агрегат ID ${parentId} (был в ${oldParent ?? 'корне'})`);
       return true;
@@ -580,6 +609,8 @@ export const useEquipmentStore = defineStore('equipment', () => {
     const child = nodes.value.find(n => n.id === childId);
     if (child && child.parentId === parentId) {
       child.parentId = null;
+       saveToStorage(nodes.value);
+      logAction('Удаление из состава', `...`);
       addCompositionRecord(parentId, childId, 'remove');
       logAction('Удаление из состава', `Узел "${child.name}" (ID ${childId}) удалён из агрегата ID ${parentId}`);
     }
@@ -651,7 +682,7 @@ function updateNodeType(id: number, data: Partial<NodeType>) {
 
   return {
     // Данные
-    nodes: filteredNodes,
+    
     flatList,
     tree,
     resources,
@@ -659,6 +690,9 @@ function updateNodeType(id: number, data: Partial<NodeType>) {
     moveHistory,
     compositionHistory,
     nodeTypes,
+    nodes: filteredNodes,   // для старых компонентов (активные с фильтрами)
+  allNodes,               // все узлы (включая списанные) – используем в таблице
+  activeNodes,
     // Методы узлов
     getNode,
     addNode,
