@@ -26,14 +26,10 @@
       </div>
       
       <div class="modal-footer">
-        <div class="legend">
-          <span v-for="type in serviceTypes" :key="type" class="legend-item">
-            <span class="legend-color" :style="{ backgroundColor: getColorForType(type) }"></span>
-            {{ type }}
-          </span>
+        <div class="export-buttons">
+          <button class="btn btn-secondary" @click="exportAsPNG">📸 Сохранить как PNG</button>
+          <button class="btn btn-secondary" @click="exportAsPDF">📄 Сохранить как PDF</button>
         </div>
-        <button class="btn btn-secondary" @click="exportAsPNG">📸 Сохранить как PNG</button>
-        <button class="btn btn-secondary" @click="exportAsPDF">📄 Сохранить как PDF</button>
         <button class="btn btn-primary" @click="close">Закрыть</button>
       </div>
     </div>
@@ -211,16 +207,36 @@ async function exportAsPDF() {
   if (!chartContainer.value) return;
   
   try {
+    // Временно убираем ограничения по высоте для полного захвата
+    const originalHeight = chartCanvas.value?.style.height;
+    if (chartCanvas.value) {
+      chartCanvas.value.style.height = 'auto';
+    }
+    
+    // Создаём canvas с полным захватом
     const canvas = await html2canvas(chartContainer.value, {
       scale: 2,
       backgroundColor: '#ffffff',
       logging: false,
       useCORS: true,
-      windowWidth: chartContainer.value.scrollWidth,
-      windowHeight: chartContainer.value.scrollHeight
+      windowWidth: document.documentElement.scrollWidth,
+      windowHeight: document.documentElement.scrollHeight,
+      onclone: (clonedDoc, element) => {
+        // В клоне тоже убираем ограничения
+        const clonedCanvas = clonedDoc.querySelector('.chart-canvas');
+        if (clonedCanvas) {
+          (clonedCanvas as HTMLElement).style.height = 'auto';
+        }
+      }
     });
     
+    // Возвращаем оригинальную высоту
+    if (chartCanvas.value && originalHeight) {
+      chartCanvas.value.style.height = originalHeight;
+    }
+    
     const imgData = canvas.toDataURL('image/png');
+    
     const pdf = new jsPDF({
       orientation: 'landscape',
       unit: 'mm',
@@ -228,9 +244,23 @@ async function exportAsPDF() {
     });
     
     const pdfWidth = pdf.internal.pageSize.getWidth();
-    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+    const pdfHeight = pdf.internal.pageSize.getHeight();
     
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+    // Рассчитываем размеры с сохранением пропорций
+    let imgWidth = pdfWidth - 10;
+    let imgHeight = (canvas.height * imgWidth) / canvas.width;
+    
+    // Если высота больше страницы, уменьшаем
+    if (imgHeight > pdfHeight - 10) {
+      imgHeight = pdfHeight - 10;
+      imgWidth = (canvas.width * imgHeight) / canvas.height;
+    }
+    
+    // Центрируем
+    const x = (pdfWidth - imgWidth) / 2;
+    const y = (pdfHeight - imgHeight) / 2;
+    
+    pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
     pdf.save(`${props.planName.replace(/\s/g, '_')}_график_ТО.pdf`);
   } catch (error) {
     console.error('Ошибка экспорта PDF:', error);
@@ -257,6 +287,13 @@ defineExpose({ open });
   padding: 20px;
   background: white;
   border-radius: 8px;
+  overflow: visible !important;
+}
+
+.chart-canvas {
+  width: 100%;
+  height: auto !important;
+  min-height: 350px;
 }
 
 .chart-header-info {
@@ -274,13 +311,6 @@ defineExpose({ open });
   margin: 0;
   color: #666;
   font-size: 14px;
-}
-
-.chart-canvas {
-  width: 100%;
-  height: 350px;
-  min-height: 350px;
-  max-height: 350px;
 }
 
 .chart-summary {
@@ -338,5 +368,10 @@ defineExpose({ open });
   justify-content: space-between;
   align-items: center;
   margin-top: 15px;
+}
+
+.export-buttons {
+  display: flex;
+  gap: 10px;
 }
 </style>
