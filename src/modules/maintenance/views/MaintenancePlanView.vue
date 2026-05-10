@@ -53,7 +53,7 @@
       </div>
     </div>
 
-    <!-- ОБЁРТКА ДЛЯ ТАБЛИЦЫ ЗАДАЧ -->
+    <!-- Таблица задач -->
     <div class="table-wrapper">
       <table class="data-table">
         <thead>
@@ -113,18 +113,12 @@
             <td>{{ task.parentName || '-' }}</td>
             <td>
               {{ formatDate(task.expiryDate) }}
-              <span v-if="isExpiryNear(task.expiryDate, task.status)" class="warning-badge"
-                >Скоро!</span
-              >
-              <span v-if="isExpiryOverdue(task.expiryDate, task.status)" class="danger-badge"
-                >Просрочено!</span
-              >
+              <span v-if="task.status !== 'completed'" class="warning-badge" :class="getDateBadgeClass(task)">{{ getDateBadgeText(task) }}</span>
+              <span v-if="task.status === 'completed'" class="success-badge">✅ Выполнено</span>
             </td>
             <td>
               {{ formatDate(task.recommendedDate) }}
-              <span v-if="isDateNear(task.recommendedDate, task.status)" class="warning-badge"
-                >Скоро!</span
-              >
+              <span v-if="task.status !== 'completed' && isDateNear(task.recommendedDate, task.status)" class="warning-badge">Скоро!</span>
             </td>
             <td>{{ task.serviceType }}</td>
             <td>{{ getStatusText(task.status) }}</td>
@@ -142,7 +136,7 @@
       </table>
     </div>
 
-    <!-- Кнопки действий (без изменений) -->
+    <!-- Кнопки действий -->
     <div class="action-bar">
       <div class="button-group">
         <div class="dropdown">
@@ -157,9 +151,29 @@
       </div>
     </div>
 
-    <!-- Модальные окна (без изменений) -->
+    <!-- Модальное окно изменения даты -->
     <div class="modal-overlay" v-if="showDateModal">
-      <!-- ... -->
+      <div class="modal-content" style="width: 450px">
+        <div class="modal-header">Изменение даты проведения ТО</div>
+        <div class="form-group">
+          <label>Оборудование</label>
+          <input :value="selectedTask?.nodeName" disabled class="form-control" />
+        </div>
+        <div class="form-group">
+          <label>Дата истечения срока ТО</label>
+          <input :value="formatDate(selectedTask?.expiryDate)" disabled class="form-control" />
+        </div>
+        <div class="form-group">
+          <label>Новая дата</label>
+          <input type="date" v-model="newDate" class="form-control" :class="{ 'invalid-date': dateError }" />
+          <div v-if="dateError" class="error-text">{{ dateError }}</div>
+          <div v-if="dateWarning" class="warning-text">{{ dateWarning }}</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="closeDateModal">Отмена</button>
+          <button class="btn btn-primary" @click="saveTaskDateWithValidation" :disabled="!!dateError">Сохранить</button>
+        </div>
+      </div>
     </div>
 
     <MaintenanceTaskForm ref="taskFormRef" @saved="refresh" />
@@ -216,12 +230,10 @@ const dateWarning = ref('')
 
 const chartModalRef = ref()
 
-//для графика:
 function openChartModal() {
   chartModalRef.value?.open()
 }
 
-// Форматирование даты YYYY-MM-DD
 function formatYMD(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -229,7 +241,6 @@ function formatYMD(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
-// Получить родительский агрегат для узла
 function getParentName(nodeId: number): string {
   const node = equipmentStore.nodes.find((n: any) => n.id === nodeId)
   if (node && node.parentId) {
@@ -239,12 +250,10 @@ function getParentName(nodeId: number): string {
   return '-'
 }
 
-// Получить дату истечения срока ТО для узла (используя store)
 function getExpiryDateFromStore(nodeId: number): string | null {
   return maintenanceStore.getExpiryDate(nodeId)
 }
 
-// Рассчитать рекомендуемую дату проведения ТО (на 10 дней раньше даты истечения)
 function getRecommendedDate(expiryDate: string | null): string | null {
   if (!expiryDate) return null
   const date = new Date(expiryDate)
@@ -252,7 +261,6 @@ function getRecommendedDate(expiryDate: string | null): string | null {
   return formatYMD(date)
 }
 
-// Загрузка данных с обогащением
 function loadData() {
   const id = Number(route.params.id)
   plan.value = maintenanceStore.allPlans?.find((p: any) => p.id === id)
@@ -275,7 +283,6 @@ function loadData() {
   }
 }
 
-// ========== Форматирование ==========
 function formatDate(dateStr: string): string {
   if (!dateStr) return ''
   const parts = dateStr.split('-')
@@ -292,9 +299,7 @@ function getStatusText(status: string): string {
   return statuses[status] || status
 }
 
-// ========== Проверка дат ==========
 function isDateNear(dateStr: string, status: string): boolean {
-  // Если задача выполнена, не показываем предупреждение
   if (status === 'completed') return false
   if (!dateStr) return false
   const today = new Date()
@@ -310,7 +315,6 @@ function isExpiryNear(dateStr: string, status: string): boolean {
 }
 
 function isExpiryOverdue(dateStr: string, status: string): boolean {
-  // Если задача выполнена, не показываем предупреждение
   if (status === 'completed') return false
   if (!dateStr) return false
   const today = new Date()
@@ -320,19 +324,27 @@ function isExpiryOverdue(dateStr: string, status: string): boolean {
   return target < today
 }
 
-function getRowClass(task: any): string {
-  // Если задача выполнена, не подсвечиваем строку
+function getDateBadgeClass(task: any): string {
   if (task.status === 'completed') return ''
-  if (task.expiryDate && isExpiryOverdue(task.expiryDate, task.status)) {
-    return 'overdue-row'
-  }
-  if (task.expiryDate && isExpiryNear(task.expiryDate, task.status)) {
-    return 'warning-row'
-  }
+  if (isExpiryOverdue(task.expiryDate, task.status)) return 'danger-badge'
+  if (isExpiryNear(task.expiryDate, task.status)) return 'warning-badge'
   return ''
 }
 
-// ========== Валидация даты ==========
+function getDateBadgeText(task: any): string {
+  if (task.status === 'completed') return ''
+  if (isExpiryOverdue(task.expiryDate, task.status)) return 'Просрочено!'
+  if (isExpiryNear(task.expiryDate, task.status)) return 'Скоро!'
+  return ''
+}
+
+function getRowClass(task: any): string {
+  if (task.status === 'completed') return ''
+  if (task.expiryDate && isExpiryOverdue(task.expiryDate, task.status)) return 'overdue-row'
+  if (task.expiryDate && isExpiryNear(task.expiryDate, task.status)) return 'warning-row'
+  return ''
+}
+
 function validateDate(newDateStr: string, expiryDateStr: string): boolean {
   dateError.value = ''
   dateWarning.value = ''
@@ -356,7 +368,7 @@ function validateDate(newDateStr: string, expiryDateStr: string): boolean {
 
   if (newDateObj > expiryDateObj) {
     const daysDiff = Math.ceil(
-      (newDateObj.getTime() - expiryDateObj.getTime()) / (1000 * 3600 * 24),
+      (newDateObj.getTime() - expiryDateObj.getTime()) / (1000 * 3600 * 24)
     )
     dateWarning.value = `⚠️ Дата проведения ТО на ${daysDiff} дней позже даты истечения срока (${formatDate(expiryDateStr)}). Рекомендуется провести ТО раньше.`
     return true
@@ -365,7 +377,6 @@ function validateDate(newDateStr: string, expiryDateStr: string): boolean {
   return true
 }
 
-// ========== Модальное окно даты ==========
 function openEditDateModal(task: any) {
   selectedTask.value = { ...task }
   newDate.value = task.recommendedDate
@@ -390,7 +401,7 @@ function saveTaskDateWithValidation() {
 
   if (dateWarning.value) {
     const confirm = window.confirm(
-      `${dateWarning.value}\n\nВы уверены, что хотите сохранить эту дату?`,
+      `${dateWarning.value}\n\nВы уверены, что хотите сохранить эту дату?`
     )
     if (!confirm) return
   }
@@ -408,11 +419,10 @@ function saveTaskDateWithValidation() {
   closeDateModal()
 }
 
-// ========== Удаление задачи ==========
 async function deleteTask(taskId: number) {
   const ok = await confirmDialog.value?.show(
     'Удаление задачи',
-    'Вы уверены, что хотите удалить эту задачу из плана ТО?',
+    'Вы уверены, что хотите удалить эту задачу из плана ТО?'
   )
   if (ok) {
     maintenanceStore.deleteTask(taskId)
@@ -420,7 +430,6 @@ async function deleteTask(taskId: number) {
   }
 }
 
-// ========== Сортировка ==========
 function sortBy(field: string) {
   if (sortField.value === field) {
     sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
@@ -430,15 +439,12 @@ function sortBy(field: string) {
   }
 }
 
-// ========== Фильтрация ==========
 const filteredAndSortedTasks = computed(() => {
   let list = [...tasks.value]
 
-  // Глобальный поиск по всем полям
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     list = list.filter((t) => {
-      // Проверяем все поля задачи
       return (
         (t.nodeName && t.nodeName.toLowerCase().includes(query)) ||
         (t.parentName && t.parentName.toLowerCase().includes(query)) ||
@@ -451,17 +457,14 @@ const filteredAndSortedTasks = computed(() => {
     })
   }
 
-  // Фильтр по статусу
   if (statusFilter.value) {
     list = list.filter((t) => t.status === statusFilter.value)
   }
 
-  // Фильтр по типу обслуживания
   if (serviceTypeFilter.value) {
     list = list.filter((t) => t.serviceType === serviceTypeFilter.value)
   }
 
-  // Сортировка
   list.sort((a, b) => {
     let valA = a[sortField.value]
     let valB = b[sortField.value]
@@ -493,7 +496,6 @@ function goToNode(nodeId: number) {
 }
 
 function openAddTaskForm() {
-  console.log('openAddTaskForm вызван')
   if (!plan.value?.id) {
     console.error('plan.id не найден')
     return
@@ -501,7 +503,6 @@ function openAddTaskForm() {
   taskFormRef.value?.open(plan.value.id)
 }
 
-// ========== Экспорт ==========
 function getTasksExportData() {
   return filteredAndSortedTasks.value.map((t, idx) => ({
     '№ п/п': idx + 1,
@@ -521,16 +522,9 @@ function exportTasksToExcel() {
     return
   }
 
-  // Создаём массив строк для Excel (массив массивов)
   const excelRows = []
-
-  // 1. Строка с названием плана
   excelRows.push([`${plan.value.name}`])
-
-  // 2. Пустая строка для отступа
   excelRows.push([])
-
-  // 3. Заголовки таблицы
   excelRows.push([
     '№ п/п',
     'Наименование оборудования',
@@ -541,7 +535,6 @@ function exportTasksToExcel() {
     'Статус',
   ])
 
-  // 4. Данные таблицы
   data.forEach((row) => {
     excelRows.push([
       row['№ п/п'],
@@ -554,14 +547,11 @@ function exportTasksToExcel() {
     ])
   })
 
-  // Создаём Excel файл
   const ws = XLSX.utils.aoa_to_sheet(excelRows)
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'План ТО')
-
   const filename = `${plan.value.name.replace(/\s/g, '_')}.xlsx`
   XLSX.writeFile(wb, filename)
-
   exportDropdownOpen.value = false
 }
 
@@ -689,6 +679,7 @@ onUnmounted(() => {
   padding: 2px 6px;
   font-size: 10px;
   margin-left: 8px;
+  white-space: nowrap;
 }
 .danger-badge {
   background-color: #c0392b;
@@ -697,6 +688,16 @@ onUnmounted(() => {
   padding: 2px 6px;
   font-size: 10px;
   margin-left: 8px;
+  white-space: nowrap;
+}
+.success-badge {
+  background-color: #27ae60;
+  color: white;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  margin-left: 8px;
+  white-space: nowrap;
 }
 .invalid-date {
   border-color: #c0392b !important;
