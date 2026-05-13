@@ -47,7 +47,9 @@
           <option value="плановое ТО">Плановое ТО</option>
           <option value="внеплановое ТО">Внеплановое ТО</option>
           <option value="капитальный ремонт">Капитальный ремонт</option>
+          <option value="текущий ремонт">Текущий ремонт</option>
           <option value="аварийный ремонт">Аварийный ремонт</option>
+          <option value="модернизация">Модернизация</option>
         </select>
         <button class="btn btn-secondary" @click="resetFilters">Сбросить</button>
       </div>

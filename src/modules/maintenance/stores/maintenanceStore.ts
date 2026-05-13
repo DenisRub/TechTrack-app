@@ -96,6 +96,28 @@ const mockTasks: MaintenanceTask[] = [
     completedDate: '2025-06-05',
     notes: '',
   },
+  {
+    id: 5,
+    planId: 1,
+    nodeId: 5,
+    nodeName: 'Датчик температуры',
+    nodeLocation: 'Площадка, наружный блок',
+    recommendedDate: '2026-07-15',
+    serviceType: 'модернизация',
+    status: 'pending',
+    notes: 'Замена датчика на новую модель',
+  },
+  {
+    id: 6,
+    planId: 1,
+    nodeId: 11,
+    nodeName: 'Сервер БД',
+    nodeLocation: 'СКЦ, стойка 2',
+    recommendedDate: '2026-08-10',
+    serviceType: 'текущий ремонт',
+    status: 'pending',
+    notes: 'Замена термопасты, чистка от пыли',
+  },
 ]
 
 export const useMaintenanceStore = defineStore('maintenance', () => {
