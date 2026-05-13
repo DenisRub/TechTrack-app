@@ -3,7 +3,7 @@
     <div class="modal-content" style="width: 900px; max-height: 100vh; overflow-y: auto;">
       <div class="modal-header">График нагрузки ТО по месяцам</div>
       
-      <!-- Контейнер для графика и экспорта -->
+      <!-- Контейнер для графика и экспорта     -->
       <div ref="chartContainer" class="chart-container">
         <div class="chart-header-info">
           <h3>{{ planName }}</h3>
