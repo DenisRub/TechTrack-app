@@ -2,23 +2,28 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { EquipmentNode, Resource, NodeType } from '../types/equipmentTypes';
 
+// Ключи для localStorage
+const STORAGE_KEY_NODES = 'equipment_nodes';
+const STORAGE_KEY_RESOURCES = 'equipment_resources';
+const STORAGE_KEY_NODE_TYPES = 'equipment_node_types';
+const STORAGE_KEY_MOVE_HISTORY = 'equipment_move_history';
+const STORAGE_KEY_COMPOSITION_HISTORY = 'equipment_composition_history';
+const STORAGE_KEY_AUDIT_LOG = 'equipment_audit_log';
 
-const STORAGE_KEY = 'equipment_nodes';
-
-function loadFromStorage(): EquipmentNode[] {
-  const stored = localStorage.getItem(STORAGE_KEY);
+function loadFromStorage<T>(key: string, defaultValue: T): T {
+  const stored = localStorage.getItem(key);
   if (stored) {
     try {
       return JSON.parse(stored);
     } catch (e) {
-      console.error('Ошибка загрузки из localStorage', e);
+      console.error(`Ошибка загрузки ${key} из localStorage`, e);
     }
   }
-  return []; // вернём пустой массив, если ничего нет
+  return defaultValue;
 }
 
-function saveToStorage(data: EquipmentNode[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+function saveToStorage<T>(key: string, data: T) {
+  localStorage.setItem(key, JSON.stringify(data));
 }
 
 function getCurrentDate(): string {
@@ -29,447 +34,55 @@ function getCurrentDate(): string {
   return `${year}-${month}-${day}`;
 }
 
-// Мок-данные – узлы
-// Мок-данные – узлы (расширенные)
-const mockNodes: EquipmentNode[] = [
-  // Агрегат 1 (существующий с новыми полями)
-  {
-    id: 1,
-    name: 'Пост контроля РО',
-    type: 'aggregate',
-    parentId: null,
-    nodeTypeId: null,
-    subsystem: 'АСКРО СЗЗиЗН',
-    manufacturer: 'НПП "Доза"',
-    model: 'БОП1-ТЕ',
-    serialNumber: '101',
-    inventoryNumber: '7415523',
-    accountingNumber: 'АС-001',
-    dateManufacture: '2020-01-01',
-    dateInstallation: '2020-06-01',
-    operationMode: '24/7',
-    isSI: false,
-    condition: 'в работе',
-    resource: '10 лет',
-    location: 'Тореза 6',
-    note: '',
-    characteristics: {
-      'Напряжение питания': { value: '220В', unit: 'В', isMain: true },
-      'Потребляемая мощность': { value: '150', unit: 'Вт', isMain: false },
-    },
-    createdAt: '2024-01-01',
-    updatedAt: '2024-06-01',
-    isDeleted: false,
-  },
-  // Блоки, входящие в агрегат 1
-  {
-    id: 2,
-    name: 'Блок детектирования',
-    type: 'block',
-    parentId: 1,
-    nodeTypeId: 1,
-    subsystem: 'АСКРО СЗЗиЗН',
-    manufacturer: 'НПП "Доза"',
-    model: 'ДБГ-С11Д',
-    serialNumber: '102',
-    inventoryNumber: '7415524',
-    accountingNumber: 'БД-001',
-    dateManufacture: '2021-02-01',
-    dateInstallation: '2021-07-01',
-    operationMode: '24/7',
-    isSI: true,
-    condition: 'в работе',
-    resource: '5 лет',
-    location: 'Тореза 6',
-    note: 'Поверка 2026',
-    characteristics: {
-      'Чувствительность': { value: '0.1', unit: 'мкЗв/с', isMain: true },
-      'Диапазон': { value: '0.01-1000', unit: 'мкЗв/ч', isMain: true },
-    },
-    createdAt: '2024-01-01',
-    updatedAt: '2024-06-01',
-    isDeleted: false,
-  },
-  {
-    id: 3,
-    name: 'Коммутатор сетевой',
-    type: 'block',
-    parentId: 1,
-    nodeTypeId: 2,
-    subsystem: 'АСКРО СЗЗиЗН',
-    manufacturer: 'D-Link',
-    model: 'DGS-1250-28XMP/A1A',
-    serialNumber: '25890D35',
-    inventoryNumber: '55023698',
-    accountingNumber: 'КС-001',
-    dateManufacture: '2019-11-01',
-    dateInstallation: '2020-01-15',
-    operationMode: '24/7',
-    isSI: false,
-    condition: 'в работе',
-    resource: '3 года',
-    location: 'Тореза 6, стойка 3',
-    note: '',
-    characteristics: {
-      'Количество портов': { value: '28', unit: 'шт', isMain: true },
-      'Скорость': { value: '1000', unit: 'Мбит/с', isMain: true },
-    },
-    createdAt: '2024-01-01',
-    updatedAt: '2024-06-01',
-    isDeleted: false,
-  },
-  // Агрегат 2 (новый)
-  {
-    id: 4,
-    name: 'Система метеоконтроля',
-    type: 'aggregate',
-    parentId: null,
-    nodeTypeId: null,
-    subsystem: 'Метеоконтроль',
-    manufacturer: 'Ametek',
-    model: 'MeteoPro-2000',
-    serialNumber: '7890X',
-    inventoryNumber: '99887766',
-    accountingNumber: 'МК-001',
-    dateManufacture: '2018-05-01',
-    dateInstallation: '2018-08-01',
-    operationMode: '24/7',
-    isSI: false,
-    condition: 'в работе',
-    resource: '7 лет',
-    location: 'Площадка, метеопост',
-    note: '',
-    characteristics: {
-      'Измеряет': { value: 'температура, влажность, давление', unit: '', isMain: true },
-      'Погрешность': { value: '0.2', unit: '%', isMain: true },
-    },
-    createdAt: '2024-01-01',
-    updatedAt: '2024-06-01',
-    isDeleted: false,
-  },
-  // Блоки агрегата 2
-  {
-    id: 5,
-    name: 'Датчик температуры',
-    type: 'block',
-    parentId: 4,
-    nodeTypeId: null,
-    subsystem: 'Метеоконтроль',
-    manufacturer: 'Siemens',
-    model: 'QFM2160',
-    serialNumber: 'TEMP-001',
-    inventoryNumber: '99887767',
-    accountingNumber: 'ДТ-001',
-    dateManufacture: '2018-06-01',
-    dateInstallation: '2018-09-01',
-    operationMode: '24/7',
-    isSI: true,
-    condition: 'на поверке',
-    resource: '2 года',
-    location: 'Площадка, наружный блок',
-    note: '',
-    characteristics: {
-      'Диапазон': { value: '-40..+70', unit: '°C', isMain: true },
-      'Точность': { value: '0.3', unit: '°C', isMain: true },
-    },
-    createdAt: '2024-01-01',
-    updatedAt: '2024-06-01',
-    isDeleted: false,
-  },
-  {
-    id: 6,
-    name: 'Датчик влажности',
-    type: 'block',
-    parentId: 4,
-    nodeTypeId: null,
-    subsystem: 'Метеоконтроль',
-    manufacturer: 'Siemens',
-    model: 'QFM2160H',
-    serialNumber: 'HUM-002',
-    inventoryNumber: '99887768',
-    accountingNumber: 'ДВ-001',
-    dateManufacture: '2018-06-01',
-    dateInstallation: '2018-09-01',
-    operationMode: '24/7',
-    isSI: true,
-    condition: 'в работе',
-    resource: '3 года',
-    location: 'Площадка, наружный блок',
-    note: '',
-    characteristics: {
-      'Диапазон': { value: '0..100', unit: '%', isMain: true },
-      'Точность': { value: '2', unit: '%', isMain: true },
-    },
-    createdAt: '2024-01-01',
-    updatedAt: '2024-06-01',
-    isDeleted: false,
-  },
-  // Дополнительный агрегат – пост контроля другой площадки
-  {
-    id: 7,
-    name: 'Пост контроля СЗЗ',
-    type: 'aggregate',
-    parentId: null,
-    nodeTypeId: null,
-    subsystem: 'АСКРО СЗЗиЗН',
-    manufacturer: 'НПП "Доза"',
-    model: 'БОП-3',
-    serialNumber: '205',
-    inventoryNumber: '7415530',
-    accountingNumber: 'АС-002',
-    dateManufacture: '2022-03-01',
-    dateInstallation: '2022-08-01',
-    operationMode: '24/7',
-    isSI: false,
-    condition: 'в работе',
-    resource: '8 лет',
-    location: 'СЗЗ, пост №2',
-    note: '',
-    characteristics: {
-      'Мощность': { value: '75', unit: 'Вт', isMain: true },
-    },
-    createdAt: '2024-01-01',
-    updatedAt: '2024-06-01',
-    isDeleted: false,
-  },
-  // Блоки для агрегата 7
-  {
-    id: 8,
-    name: 'Блок детектирования гамма',
-    type: 'block',
-    parentId: 7,
-    nodeTypeId: 1,
-    subsystem: 'АСКРО СЗЗиЗН',
-    manufacturer: 'НПП "Доза"',
-    model: 'БДГ-01',
-    serialNumber: '301',
-    inventoryNumber: '7415531',
-    accountingNumber: 'БДГ-001',
-    dateManufacture: '2022-04-01',
-    dateInstallation: '2022-09-01',
-    operationMode: '24/7',
-    isSI: true,
-    condition: 'в работе',
-    resource: '4 года',
-    location: 'СЗЗ, пост №2',
-    note: '',
-    characteristics: {
-      'Энергетический диапазон': { value: '0.1-3', unit: 'МэВ', isMain: true },
-    },
-    createdAt: '2024-01-01',
-    updatedAt: '2024-06-01',
-    isDeleted: false,
-  },
-  // Списаный узел (isDeleted=true)
-  {
-    id: 9,
-    name: 'Коммутатор устаревший',
-    type: 'block',
-    parentId: null,
-    nodeTypeId: 2,
-    subsystem: 'АСКРО СЗЗиЗН',
-    manufacturer: '3Com',
-    model: 'SuperStack 3',
-    serialNumber: 'OLD-010',
-    inventoryNumber: '55023000',
-    accountingNumber: 'КС-999',
-    dateManufacture: '2010-01-01',
-    dateInstallation: '2010-06-01',
-    operationMode: '',
-    isSI: false,
-    condition: 'списан',
-    resource: '',
-    location: 'Склад',
-    note: 'Списан в 2023',
-    characteristics: {},
-    createdAt: '2024-01-01',
-    updatedAt: '2024-06-01',
-    isDeleted: true,
-  },
-  // Ещё один агрегат с дочерними
-  {
-    id: 10,
-    name: 'Серверный шкаф',
-    type: 'aggregate',
-    parentId: null,
-    nodeTypeId: null,
-    subsystem: 'СКЦ НИИАР',
-    manufacturer: '',
-    model: '42U',
-    serialNumber: 'RACK-001',
-    inventoryNumber: '55123456',
-    accountingNumber: 'РК-001',
-    dateManufacture: '2019-01-01',
-    dateInstallation: '2019-01-15',
-    operationMode: '24/7',
-    isSI: false,
-    condition: 'в работе',
-    resource: '',
-    location: 'СКЦ, серверная',
-    note: 'Без оборудования',
-    characteristics: {},
-    createdAt: '2024-01-01',
-    updatedAt: '2024-06-01',
-    isDeleted: false,
-  },
-  // Блок внутри шкафа
-  {
-    id: 11,
-    name: 'Сервер БД',
-    type: 'block',
-    parentId: 10,
-    nodeTypeId: null,
-    subsystem: 'СКЦ НИИАР',
-    manufacturer: 'HP',
-    model: 'ProLiant DL380',
-    serialNumber: 'HP-BD-001',
-    inventoryNumber: '55123457',
-    accountingNumber: 'СРВ-001',
-    dateManufacture: '2020-01-01',
-    dateInstallation: '2020-02-01',
-    operationMode: '24/7',
-    isSI: false,
-    condition: 'в работе',
-    resource: '5 лет',
-    location: 'СКЦ, стойка 2',
-    note: '',
-    characteristics: {
-      'Оперативная память': { value: '64', unit: 'ГБ', isMain: true },
-    },
-    createdAt: '2024-01-01',
-    updatedAt: '2024-06-01',
-    isDeleted: false,
-  },
-];
-
-// Добавим больше ресурсов
-const mockResources: Resource[] = [
-  { id: 1, nodeId: 1, name: 'Остаточная ёмкость', value: 85, unit: '%', updatedAt: '2024-01-01' },
-  { id: 2, nodeId: 2, name: 'Чувствительность', value: '0.1', unit: 'мкЗв/с', updatedAt: '2024-01-01' },
-  { id: 3, nodeId: 5, name: 'Температура', value: 22.5, unit: '°C', updatedAt: '2024-01-01' },
-  { id: 4, nodeId: 6, name: 'Влажность', value: 58, unit: '%', updatedAt: '2024-01-01' },
-];
-
-const mockNodeTypes: NodeType[] = [
-  { 
-    id: 1, 
-    name: 'Блок детектирования', 
-    characteristicsTemplate: { 
-      тип: { value: '', unit: '', isMain: true }, 
-      чувствительность: { value: '', unit: 'мкЗв/с', isMain: true }, 
-      диапазон: { value: '', unit: 'мкЗв/ч', isMain: false } 
-    
-    }, 
-    createdAt: '2024-01-01', 
-    updatedAt: '2024-01-01' 
-  },
-  { 
-    id: 2, 
-    name: 'Маршрутизатор', 
-    characteristicsTemplate: { 
-      модель: { value: '', unit: '', isMain: true }, 
-      порты: { value: '', unit: 'шт', isMain: true }, 
-      пропускная_способность: { value: '', unit: 'Мбит/с', isMain: false } 
-    }, 
-    createdAt: '2024-01-01', 
-    updatedAt: '2024-01-01' 
-  },
-  { 
-    id: 3, 
-    name: 'Блок питания', 
-    characteristicsTemplate: { 
-      напряжение: { value: '', unit: 'В', isMain: true }, 
-      ток: { value: '', unit: 'А', isMain: true }, 
-      мощность: { value: '', unit: 'Вт', isMain: true } 
-    }, 
-    createdAt: '2024-01-01', 
-    updatedAt: '2024-01-01' 
-  },
-  { 
-    id: 4, 
-    name: 'Дозиметр', 
-    characteristicsTemplate: { 
-      диапазон_измерений: { value: '', unit: 'мкЗв/ч', isMain: true }, 
-      погрешность: { value: '', unit: '%', isMain: true }, 
-      энергетический_диапазон: { value: '', unit: 'МэВ', isMain: false } 
-    }, 
-    createdAt: '2024-01-01', 
-    updatedAt: '2024-01-01' 
-  },
-  { 
-    id: 5, 
-    name: 'Аккумулятор', 
-    characteristicsTemplate: { 
-      ёмкость: { value: '', unit: 'А·ч', isMain: true }, 
-      напряжение: { value: '', unit: 'В', isMain: true }, 
-      тип: { value: '', unit: '', isMain: false } 
-    }, 
-    createdAt: '2024-01-01', 
-    updatedAt: '2024-01-01' 
-  },
-  { 
-    id: 6, 
-    name: 'Сервер', 
-    characteristicsTemplate: { 
-      процессор: { value: '', unit: '', isMain: true }, 
-      ОЗУ: { value: '', unit: 'ГБ', isMain: true }, 
-      диски: { value: '', unit: 'ТБ', isMain: false } 
-    }, 
-    createdAt: '2024-01-01', 
-    updatedAt: '2024-01-01' 
-  },
-  { 
-    id: 7, 
-    name: 'Коммутатор', 
-    characteristicsTemplate: { 
-      порты: { value: '', unit: 'шт', isMain: true }, 
-      скорость: { value: '', unit: 'Мбит/с', isMain: true }, 
-      уровень: { value: '', unit: '', isMain: false } 
-    }, 
-    createdAt: '2024-01-01', 
-    updatedAt: '2024-01-01' 
-  },
-];
+// ========== МОК-ДАННЫЕ (используются только при первом запуске) ==========
+const mockNodes: EquipmentNode[] = [ /* ... ваш массив ... */ ];
+const mockResources: Resource[] = [ /* ... */ ];
+const mockNodeTypes: NodeType[] = [ /* ... */ ];
 
 export const useEquipmentStore = defineStore('equipment', () => {
-  // ========== Основные данные ==========
- const saved = loadFromStorage();
-const nodes = ref<EquipmentNode[]>(saved.length ? saved : [...mockNodes]); const resources = ref<Resource[]>([...mockResources]);
-  const nodeTypes = ref<NodeType[]>([...mockNodeTypes]);
-  const allNodes = computed(() => nodes.value); // все узлы, включая списанные
-const activeNodes = computed(() => nodes.value.filter(n => !n.isDeleted));
+  // ========== ИНИЦИАЛИЗАЦИЯ С ЛОКАЛЬНЫМ ХРАНИЛИЩЕМ ==========
+  const nodes = ref<EquipmentNode[]>(loadFromStorage(STORAGE_KEY_NODES, mockNodes));
+  const resources = ref<Resource[]>(loadFromStorage(STORAGE_KEY_RESOURCES, mockResources));
+  const nodeTypes = ref<NodeType[]>(loadFromStorage(STORAGE_KEY_NODE_TYPES, mockNodeTypes));
+  const moveHistory = ref<{ id: number; nodeId: number; fromLocation: string; toLocation: string; date: string; userId: string }[]>(
+    loadFromStorage(STORAGE_KEY_MOVE_HISTORY, [])
+  );
+  const compositionHistory = ref<{ id: number; parentId: number; childId: number; action: 'add' | 'remove'; date: string; userId?: string }[]>(
+    loadFromStorage(STORAGE_KEY_COMPOSITION_HISTORY, [])
+  );
+  const auditLog = ref<{ timestamp: string; user: string; action: string; details: string }[]>(
+    loadFromStorage(STORAGE_KEY_AUDIT_LOG, [])
+  );
 
+  // ========== ВСПОМОГАТЕЛЬНЫЕ ВЫЧИСЛЯЕМЫЕ СВОЙСТВА ==========
+  const allNodes = computed(() => nodes.value);
+  const activeNodes = computed(() => nodes.value.filter(n => !n.isDeleted));
+  const flatList = computed(() => activeNodes.value);
 
-// Для дерева используем activeNodes
-const tree = computed(() => {
-  const build = (parentId: number | null): any[] => {
-    return activeNodes.value
-      .filter(n => n.parentId === parentId)
-      .map(n => ({ ...n, children: build(n.id) }));
-  };
-  return build(null);
-});
-
-// Фильтрация (поиск, тип) остаётся для активных узлов (для совместимости)
-const filteredNodes = computed(() => {
-  let list = activeNodes.value;
-  const { search, type } = filterParams.value;
-  if (search) {
-    const s = search.toLowerCase();
-    list = list.filter(n => n.name.toLowerCase().includes(s));
-  }
-  if (type) {
-    list = list.filter(n => n.type === type);
-  }
-  return list;
-});
-  // ========== Фильтрация ==========
   const filterParams = ref({ search: '', type: '' });
+  const filteredNodes = computed(() => {
+    let list = activeNodes.value;
+    const { search, type } = filterParams.value;
+    if (search) {
+      const s = search.toLowerCase();
+      list = list.filter(n => n.name.toLowerCase().includes(s));
+    }
+    if (type) {
+      list = list.filter(n => n.type === type);
+    }
+    return list;
+  });
 
-  const flatList = computed(() => nodes.value.filter(n => !n.isDeleted));
+  const tree = computed(() => {
+    const build = (parentId: number | null): any[] => {
+      return activeNodes.value
+        .filter(n => n.parentId === parentId)
+        .map(n => ({ ...n, children: build(n.id) }));
+    };
+    return build(null);
+  });
 
-  // ========== Журнал действий ==========
-  const auditLog = ref<{ timestamp: string; user: string; action: string; details: string }[]>([]);
+  // ========== ЖУРНАЛИРОВАНИЕ ==========
   function logAction(action: string, details: string) {
     let user = 'anonymous';
     const userStr = localStorage.getItem('user');
@@ -482,28 +95,29 @@ const filteredNodes = computed(() => {
       action,
       details,
     });
+    saveToStorage(STORAGE_KEY_AUDIT_LOG, auditLog.value);
     console.log(`[AUDIT] ${action}: ${details} (${user})`);
   }
 
-  // ========== Узлы (CRUD) ==========
+  // ========== УЗЛЫ (CRUD) С СОХРАНЕНИЕМ ==========
   function getNode(id: number): EquipmentNode | undefined {
     return nodes.value.find(n => n.id === id);
   }
 
   function addNode(node: Omit<EquipmentNode, 'id' | 'createdAt' | 'updatedAt' | 'isDeleted'>) {
-  const newId = Math.max(...nodes.value.map(n => n.id), 0) + 1;
-  const now = getCurrentDate();
-  const newNode: EquipmentNode = {
-    ...node,
-    id: newId,
-    createdAt: now,
-    updatedAt: now,
-    isDeleted: false,
-  };
-  nodes.value.push(newNode);
-  saveToStorage(nodes.value); // <-- добавить эту строку
-  logAction('Создание узла', `Узел "${node.name}" (ID ${newId})`);
-}
+    const newId = Math.max(...nodes.value.map(n => n.id), 0) + 1;
+    const now = getCurrentDate();
+    const newNode: EquipmentNode = {
+      ...node,
+      id: newId,
+      createdAt: now,
+      updatedAt: now,
+      isDeleted: false,
+    };
+    nodes.value.push(newNode);
+    saveToStorage(STORAGE_KEY_NODES, nodes.value);
+    logAction('Создание узла', `Узел "${node.name}" (ID ${newId})`);
+  }
 
   function updateNode(id: number, data: Partial<EquipmentNode>) {
     const idx = nodes.value.findIndex(n => n.id === id);
@@ -516,19 +130,20 @@ const filteredNodes = computed(() => {
       ...data,
       updatedAt: getCurrentDate(),
     };
+    saveToStorage(STORAGE_KEY_NODES, nodes.value);
     logAction('Редактирование узла', `Узел ID ${id}, было: "${oldName}", стало: "${nodes.value[idx].name}"`);
   }
 
- function deleteNode(id: number) {
+  function deleteNode(id: number) {
     const node = nodes.value.find(n => n.id === id);
     if (node && !node.isDeleted) {
       node.isDeleted = true;
-      saveToStorage(nodes.value);
+      saveToStorage(STORAGE_KEY_NODES, nodes.value);
       logAction('Списание узла', `Узел "${node.name}" (ID ${id}) помечен как удалённый`);
     }
   }
-  // ========== Перемещения ==========
-  const moveHistory = ref<{ id: number; nodeId: number; fromLocation: string; toLocation: string; date: string; userId: string }[]>([]);
+
+  // ========== ПЕРЕМЕЩЕНИЯ ==========
   function addMoveRecord(nodeId: number, fromLocation: string, toLocation: string) {
     let user = 'anonymous';
     const userStr = localStorage.getItem('user');
@@ -544,30 +159,34 @@ const filteredNodes = computed(() => {
       date: getCurrentDate(),
       userId: user,
     });
+    saveToStorage(STORAGE_KEY_MOVE_HISTORY, moveHistory.value);
     logAction('Перемещение узла', `Узел ${nodeId} перемещён из "${fromLocation}" в "${toLocation}"`);
   }
+
   function getMoveHistoryForNode(nodeId: number) {
     return moveHistory.value.filter(h => h.nodeId === nodeId).sort((a, b) => b.id - a.id);
   }
 
-  // ========== Комплектация и её история ==========
-  const compositionHistory = ref<{ id: number; parentId: number; childId: number; action: 'add' | 'remove'; date: string; userId?: string }[]>([]);
+  // ========== КОМПЛЕКТАЦИЯ И ЕЁ ИСТОРИЯ ==========
   function addCompositionRecord(parentId: number, childId: number, action: 'add' | 'remove') {
     let user = 'anonymous';
     const userStr = localStorage.getItem('user');
     if (userStr) {
       try { user = JSON.parse(userStr).login || 'anonymous'; } catch {}
     }
+    const newId = compositionHistory.value.length + 1;
     compositionHistory.value.push({
-      id: compositionHistory.value.length + 1,
+      id: newId,
       parentId,
       childId,
       action,
       date: getCurrentDate(),
       userId: user,
     });
+    saveToStorage(STORAGE_KEY_COMPOSITION_HISTORY, compositionHistory.value);
     logAction('Изменение комплектации', `${action === 'add' ? 'Добавление' : 'Удаление'} узла ${childId} ${action === 'add' ? 'в' : 'из'} агрегата ${parentId}`);
   }
+
   function getCompositionHistoryForNode(nodeId: number) {
     return compositionHistory.value.filter(h => h.parentId === nodeId || h.childId === nodeId);
   }
@@ -596,8 +215,7 @@ const filteredNodes = computed(() => {
     if (child && child.parentId !== parentId) {
       const oldParent = child.parentId;
       child.parentId = parentId;
-      saveToStorage(nodes.value);
-      logAction('Добавление в состав', `...`);
+      saveToStorage(STORAGE_KEY_NODES, nodes.value);
       addCompositionRecord(parentId, childId, 'add');
       logAction('Добавление в состав', `Узел "${child.name}" (ID ${childId}) добавлен в агрегат ID ${parentId} (был в ${oldParent ?? 'корне'})`);
       return true;
@@ -609,22 +227,24 @@ const filteredNodes = computed(() => {
     const child = nodes.value.find(n => n.id === childId);
     if (child && child.parentId === parentId) {
       child.parentId = null;
-       saveToStorage(nodes.value);
-      logAction('Удаление из состава', `...`);
+      saveToStorage(STORAGE_KEY_NODES, nodes.value);
       addCompositionRecord(parentId, childId, 'remove');
       logAction('Удаление из состава', `Узел "${child.name}" (ID ${childId}) удалён из агрегата ID ${parentId}`);
     }
   }
 
-  // ========== Ресурсы ==========
+  // ========== РЕСУРСЫ ==========
   function getResourcesForNode(nodeId: number): Resource[] {
     return resources.value.filter(r => r.nodeId === nodeId);
   }
+
   function addResource(res: Omit<Resource, 'id'>) {
     const newId = Math.max(...resources.value.map(r => r.id), 0) + 1;
     resources.value.push({ ...res, id: newId, updatedAt: getCurrentDate() });
+    saveToStorage(STORAGE_KEY_RESOURCES, resources.value);
     logAction('Добавление ресурса', `Ресурс "${res.name}" для узла ID ${res.nodeId}`);
   }
+
   function updateResource(id: number, data: Partial<Resource>) {
     const idx = resources.value.findIndex(r => r.id === id);
     if (idx === -1) return;
@@ -638,51 +258,63 @@ const filteredNodes = computed(() => {
       unit: data.unit !== undefined ? data.unit : old.unit,
       updatedAt: getCurrentDate(),
     };
+    saveToStorage(STORAGE_KEY_RESOURCES, resources.value);
     logAction('Редактирование ресурса', `Ресурс ID ${id} для узла ID ${old.nodeId}`);
   }
+
   function deleteResource(id: number) {
     const res = resources.value.find(r => r.id === id);
     if (!res) return;
     const idx = resources.value.indexOf(res);
     resources.value.splice(idx, 1);
+    saveToStorage(STORAGE_KEY_RESOURCES, resources.value);
     logAction('Удаление ресурса', `Ресурс "${res.name}" (ID ${id}) удалён`);
   }
 
-  // ========== Виды узлов (Node Types) ==========
+  // ========== ВИДЫ УЗЛОВ ==========
   function getNodeTypes(): NodeType[] {
     return nodeTypes.value;
   }
+
   function addNodeType(type: Omit<NodeType, 'id' | 'createdAt' | 'updatedAt'>) {
     const newId = Math.max(...nodeTypes.value.map(t => t.id), 0) + 1;
     const now = getCurrentDate();
     nodeTypes.value.push({ ...type, id: newId, createdAt: now, updatedAt: now });
+    saveToStorage(STORAGE_KEY_NODE_TYPES, nodeTypes.value);
   }
-function updateNodeType(id: number, data: Partial<NodeType>) {
-  const idx = nodeTypes.value.findIndex(t => t.id === id);
-  if (idx === -1) return;
-  const existing = nodeTypes.value[idx];
-  if (!existing) return; // защита от undefined
-  nodeTypes.value[idx] = {
-    id: existing.id,
-    name: data.name ?? existing.name,
-    characteristicsTemplate: data.characteristicsTemplate ?? existing.characteristicsTemplate,
-    createdAt: existing.createdAt,
-    updatedAt: getCurrentDate(),
-  };
-}
+
+  function updateNodeType(id: number, data: Partial<NodeType>) {
+    const idx = nodeTypes.value.findIndex(t => t.id === id);
+    if (idx === -1) return;
+    const existing = nodeTypes.value[idx];
+    if (!existing) return;
+    nodeTypes.value[idx] = {
+      id: existing.id,
+      name: data.name ?? existing.name,
+      characteristicsTemplate: data.characteristicsTemplate ?? existing.characteristicsTemplate,
+      createdAt: existing.createdAt,
+      updatedAt: getCurrentDate(),
+    };
+    saveToStorage(STORAGE_KEY_NODE_TYPES, nodeTypes.value);
+  }
+
   function deleteNodeType(id: number) {
     const idx = nodeTypes.value.findIndex(t => t.id === id);
     if (idx !== -1) nodeTypes.value.splice(idx, 1);
+    saveToStorage(STORAGE_KEY_NODE_TYPES, nodeTypes.value);
   }
 
-  // ========== Фильтрация ==========
+  // ========== ФИЛЬТРАЦИЯ ==========
   function setFilterParams(params: Partial<typeof filterParams.value>) {
     filterParams.value = { ...filterParams.value, ...params };
   }
 
+  // ========== ЭКСПОРТ ==========
   return {
     // Данные
-    
+    nodes: filteredNodes,
+    allNodes,
+    activeNodes,
     flatList,
     tree,
     resources,
@@ -690,9 +322,6 @@ function updateNodeType(id: number, data: Partial<NodeType>) {
     moveHistory,
     compositionHistory,
     nodeTypes,
-    nodes: filteredNodes,   // для старых компонентов (активные с фильтрами)
-  allNodes,               // все узлы (включая списанные) – используем в таблице
-  activeNodes,
     // Методы узлов
     getNode,
     addNode,
