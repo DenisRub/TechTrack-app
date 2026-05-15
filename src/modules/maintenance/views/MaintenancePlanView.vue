@@ -3,7 +3,7 @@
     <div style="display: flex; justify-content: space-between; margin-bottom: 20px">
       <h2>{{ plan.name }}</h2>
       <div>
-        <button class="btn btn-secondary" @click="goBack">← Назад</button>
+        <button v-if="!embedded" class="btn btn-secondary" @click="goBack">← Назад</button>
       </div>
     </div>
 
@@ -97,6 +97,7 @@
                 sortOrder === 'asc' ? '↑' : '↓'
               }}</span>
             </th>
+            <th>Примечание</th>
             <th>Действия</th>
           </tr>
         </thead>
@@ -115,15 +116,25 @@
             <td>{{ task.parentName || '-' }}</td>
             <td>
               {{ formatDate(task.expiryDate) }}
-              <span v-if="task.status !== 'completed'" class="warning-badge" :class="getDateBadgeClass(task)">{{ getDateBadgeText(task) }}</span>
+              <span
+                v-if="task.status !== 'completed'"
+                class="warning-badge"
+                :class="getDateBadgeClass(task)"
+                >{{ getDateBadgeText(task) }}</span
+              >
               <span v-if="task.status === 'completed'" class="success-badge">✅ Выполнено</span>
             </td>
             <td>
               {{ formatDate(task.recommendedDate) }}
-              <span v-if="task.status !== 'completed' && isDateNear(task.recommendedDate, task.status)" class="warning-badge">Скоро!</span>
+              <span
+                v-if="task.status !== 'completed' && isDateNear(task.recommendedDate, task.status)"
+                class="warning-badge"
+                >Скоро!</span
+              >
             </td>
             <td>{{ task.serviceType }}</td>
             <td>{{ getStatusText(task.status) }}</td>
+            <td>{{ task.notes || '-' }}</td>
             <td>
               <button class="btn btn-sm btn-secondary" @click="openEditDateModal(task)">
                 📅 Изменить дату
@@ -132,7 +143,7 @@
             </td>
           </tr>
           <tr v-if="filteredAndSortedTasks.length === 0">
-            <td colspan="8">Нет данных</td>
+            <td colspan="9">Нет данных</td>
           </tr>
         </tbody>
       </table>
@@ -167,13 +178,24 @@
         </div>
         <div class="form-group">
           <label>Новая дата</label>
-          <input type="date" v-model="newDate" class="form-control" :class="{ 'invalid-date': dateError }" />
+          <input
+            type="date"
+            v-model="newDate"
+            class="form-control"
+            :class="{ 'invalid-date': dateError }"
+          />
           <div v-if="dateError" class="error-text">{{ dateError }}</div>
           <div v-if="dateWarning" class="warning-text">{{ dateWarning }}</div>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="closeDateModal">Отмена</button>
-          <button class="btn btn-primary" @click="saveTaskDateWithValidation" :disabled="!!dateError">Сохранить</button>
+          <button
+            class="btn btn-primary"
+            @click="saveTaskDateWithValidation"
+            :disabled="!!dateError"
+          >
+            Сохранить
+          </button>
         </div>
       </div>
     </div>
@@ -191,7 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMaintenanceStore } from '../stores/maintenanceStore'
 import { useEquipmentStore } from '@/modules/equipment/stores/equipmentStore'
@@ -202,6 +224,12 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import * as exportUtils from '@/utils/exportUtils'
 import * as XLSX from 'xlsx'
 import ChartModal from '../components/ChartModal.vue'
+
+// Пропсы для встраивания
+const props = defineProps<{
+  id?: number
+  embedded?: boolean
+}>()
 
 const route = useRoute()
 const router = useRouter()
@@ -231,6 +259,15 @@ const dateError = ref('')
 const dateWarning = ref('')
 
 const chartModalRef = ref()
+
+const canEdit = computed(() => {
+  const user = localStorage.getItem('user')
+  if (!user) return false
+  const role = JSON.parse(user).role
+  return role === 'operator' || role === 'admin'
+})
+
+const embedded = computed(() => props.embedded === true)
 
 function openChartModal() {
   chartModalRef.value?.open()
@@ -264,24 +301,19 @@ function getRecommendedDate(expiryDate: string | null): string | null {
 }
 
 function loadData() {
-  const id = Number(route.params.id)
-  plan.value = maintenanceStore.allPlans?.find((p: any) => p.id === id)
+  // Определяем ID: из пропса или из маршрута
+  const id = props.id || Number(route.params.id)
+  if (!id) return
+
+  console.log('Loading plan with id:', id)
+
+  // Получаем план из store (используем plans, а не allPlans)
+  plan.value = maintenanceStore.plans.find((p: any) => p.id === id)
+  console.log('Found plan:', plan.value)
+
   if (plan.value) {
-    const rawTasks = maintenanceStore.getTasksForPlan(id)
-    tasks.value = rawTasks
-      .filter((t: any) => {
-        const node = equipmentStore.nodes.find((n: any) => n.id === t.nodeId)
-        return node && node.type === 'block' && !node.isDeleted
-      })
-      .map((t: any) => {
-        const expiryDate = getExpiryDateFromStore(t.nodeId)
-        return {
-          ...t,
-          parentName: getParentName(t.nodeId),
-          expiryDate: expiryDate,
-          recommendedDate: t.recommendedDate || getRecommendedDate(expiryDate) || t.recommendedDate,
-        }
-      })
+    tasks.value = maintenanceStore.getTasksForPlan(id)
+    console.log('Tasks:', tasks.value)
   }
 }
 
@@ -370,7 +402,7 @@ function validateDate(newDateStr: string, expiryDateStr: string): boolean {
 
   if (newDateObj > expiryDateObj) {
     const daysDiff = Math.ceil(
-      (newDateObj.getTime() - expiryDateObj.getTime()) / (1000 * 3600 * 24)
+      (newDateObj.getTime() - expiryDateObj.getTime()) / (1000 * 3600 * 24),
     )
     dateWarning.value = `⚠️ Дата проведения ТО на ${daysDiff} дней позже даты истечения срока (${formatDate(expiryDateStr)}). Рекомендуется провести ТО раньше.`
     return true
@@ -403,7 +435,7 @@ function saveTaskDateWithValidation() {
 
   if (dateWarning.value) {
     const confirm = window.confirm(
-      `${dateWarning.value}\n\nВы уверены, что хотите сохранить эту дату?`
+      `${dateWarning.value}\n\nВы уверены, что хотите сохранить эту дату?`,
     )
     if (!confirm) return
   }
@@ -424,7 +456,7 @@ function saveTaskDateWithValidation() {
 async function deleteTask(taskId: number) {
   const ok = await confirmDialog.value?.show(
     'Удаление задачи',
-    'Вы уверены, что хотите удалить эту задачу из плана ТО?'
+    'Вы уверены, что хотите удалить эту задачу из плана ТО?',
   )
   if (ok) {
     maintenanceStore.deleteTask(taskId)
@@ -454,7 +486,8 @@ const filteredAndSortedTasks = computed(() => {
         (t.status && getStatusText(t.status).toLowerCase().includes(query)) ||
         (t.expiryDate && formatDate(t.expiryDate).toLowerCase().includes(query)) ||
         (t.recommendedDate && formatDate(t.recommendedDate).toLowerCase().includes(query)) ||
-        (t.nodeLocation && t.nodeLocation.toLowerCase().includes(query))
+        (t.nodeLocation && t.nodeLocation.toLowerCase().includes(query)) ||
+        (t.notes && t.notes.toLowerCase().includes(query))
       )
     })
   }
@@ -490,7 +523,11 @@ function refresh() {
 }
 
 function goBack() {
-  router.back()
+  if (embedded.value) {
+    router.push('/subsystems')
+  } else {
+    router.back()
+  }
 }
 
 function goToNode(nodeId: number) {
@@ -514,6 +551,7 @@ function getTasksExportData() {
     'Дата проведения ТО': formatDate(t.recommendedDate),
     'Тип обслуживания': t.serviceType,
     Статус: getStatusText(t.status),
+    Примечание: t.notes || '-',
   }))
 }
 
@@ -535,6 +573,7 @@ function exportTasksToExcel() {
     'Дата проведения ТО',
     'Тип обслуживания',
     'Статус',
+    'Примечание',
   ])
 
   data.forEach((row) => {
@@ -546,6 +585,7 @@ function exportTasksToExcel() {
       row['Дата проведения ТО'],
       row['Тип обслуживания'],
       row['Статус'],
+      row['Примечание'],
     ])
   })
 
@@ -581,6 +621,23 @@ function handleClickOutside(event: MouseEvent) {
     exportDropdownOpen.value = false
   }
 }
+
+// Следим за изменением пропса id
+watch(
+  () => props.id,
+  () => {
+    loadData()
+  },
+  { immediate: true },
+)
+
+// Следим за изменением маршрута
+watch(
+  () => route.params.id,
+  () => {
+    if (!props.id) loadData()
+  },
+)
 
 onMounted(() => {
   loadData()

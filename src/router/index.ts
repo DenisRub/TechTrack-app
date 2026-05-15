@@ -20,6 +20,10 @@ import ResourceCardView from '@/modules/resources/views/ResourceCardView.vue'
 import MaintenanceView from '@/modules/maintenance/views/MaintenanceView.vue'
 import MaintenancePlanView from '@/modules/maintenance/views/MaintenancePlanView.vue'
 
+import SubsystemCard from '@/modules/subsystems/components/SubsystemCard.vue'
+import SubsystemsView from '@/modules/subsystems/views/SubsystemsView.vue'
+import PlanView from '@/modules/subsystems/views/PlanView.vue'
+
 const routes = [
   {
     path: '/login',
@@ -49,10 +53,14 @@ const routes = [
       { path: 'maintenance', component: MaintenanceView },
       { path: 'maintenance/:id', component: MaintenancePlanView },
 
-      // Заглушки для будущих модулей
-      { path: 'subsystems', component: PlaceholderView },
-      { path: 'diagnostics', component: PlaceholderView },
-
+      { path: 'subsystems', component: SubsystemsView },
+      { path: 'subsystems/:id', component: SubsystemsView }, // для карточки подсистемы
+      { path: 'subsystems/plan/:id', component: PlanView },
+      {
+        path: 'subsystems',
+        component: SubsystemsView,
+        children: [{ path: ':id', component: SubsystemCard }],
+      },
       // Перенаправление по умолчанию
       { path: '', redirect: '/si' },
     ],

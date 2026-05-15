@@ -1,9 +1,10 @@
 <template>
   <div class="card" v-if="instrument">
     <div style="display: flex; justify-content: space-between; margin-bottom: 20px">
-      <h2>Карточка средства измерения</h2>
+      <h2>Средства измерения</h2>
       <div>
-        <button class="btn btn-secondary" @click="goBack">← Назад</button>
+        <!-- Кнопка "Назад" показываем только если не в режиме подсистемы -->
+        <button v-if="!isEmbedded" class="btn btn-secondary" @click="goBack">← Назад</button>
         <button v-if="canEdit" class="btn btn-primary" @click="editInstrument">
           Редактировать
         </button>
@@ -17,62 +18,77 @@
       </div>
     </div>
 
-    <div style="margin-bottom: 20px">
-      <h3>Основные сведения</h3>
-      <table style="width: 100%; border-collapse: collapse">
-        <tbody>
-          <tr>
-            <td style="padding: 8px 0; width: 200px"><strong>Табельный номер</strong></td>
-            <td>{{ instrument.tabNumber }}</td>
-          </tr>
-          <tr>
-            <td style="padding: 8px 0"><strong>Наименование</strong></td>
-            <td>{{ instrument.name }}</td>
-          </tr>
-          <tr>
-            <td style="padding: 8px 0"><strong>Межповерочный интервал</strong></td>
-            <td>{{ instrument.verificationInterval }} лет</td>
-          </tr>
-          <tr>
-            <td style="padding: 8px 0"><strong>Дата последней поверки</strong></td>
-            <td>{{ lastVerificationDate ? formatDate(lastVerificationDate) : '-' }}</td>
-          </tr>
-          <tr>
-            <td style="padding: 8px 0"><strong>Дата следующей поверки</strong></td>
-            <td>
-              <template v-if="nextVerificationDate">
-                {{ formatDate(nextVerificationDate) }}
-                <span
-                  v-if="isWarning && instrument.status !== 'выведено'"
-                  style="color: #c0392b; margin-left: 10px"
-                  >(менее 30 дней)</span
-                >
-              </template>
-              <template v-else>-</template>
-              <span v-if="instrument.status === 'выведено'" style="color: #999; margin-left: 10px"
-                >(прибор списан)</span
+    <!-- Детальная карточка в 2 колонки -->
+    <div class="card-detail-grid">
+      <div class="detail-col">
+        <div class="detail-row">
+          <div class="detail-label">Тип</div>
+          <div class="detail-value">{{ instrument.typeName || '-' }}</div>
+          <div class="detail-label">Марка</div>
+          <div class="detail-value">{{ instrument.model || '-' }}</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">Производитель</div>
+          <div class="detail-value">{{ instrument.manufacturer || '-' }}</div>
+          <div class="detail-label">Дата производства</div>
+          <div class="detail-value">{{ instrument.productionDate || '-' }}</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">Узел</div>
+          <div class="detail-value">{{ instrument.nodeName || '-' }}</div>
+          <div class="detail-label">Статус</div>
+          <div
+            class="detail-value"
+            :class="{ 'status-disabled': instrument.status === 'выведено' }"
+          >
+            {{ instrument.status || '-' }}
+          </div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">Размещение</div>
+          <div class="detail-value">{{ instrument.location || '-' }}</div>
+          <div class="detail-label">Основные параметры</div>
+          <div class="detail-value">{{ instrument.mainParams || '-' }}</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">Дата сдачи в поверку</div>
+          <div class="detail-value">{{ formatDate(instrument.transferDate) || '-' }}</div>
+          <div class="detail-label">Дата получения из поверки</div>
+          <div class="detail-value">{{ formatDate(instrument.receiptDate) || '-' }}</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">Дата последней поверки</div>
+          <div class="detail-value">
+            {{ lastVerificationDate ? formatDate(lastVerificationDate) : '-' }}
+          </div>
+          <div class="detail-label">Дата следующей поверки</div>
+          <div class="detail-value">
+            <template v-if="nextVerificationDate">
+              {{ formatDate(nextVerificationDate) }}
+              <span v-if="isWarning && instrument.status !== 'выведено'" class="warning-badge"
+                >(менее 30 дней)</span
               >
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 8px 0"><strong>Статус</strong></td>
-            <td :class="{ 'status-disabled': instrument.status === 'выведено' }">
-              {{ instrument.status }}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding: 8px 0"><strong>Местоположение</strong></td>
-            <td>{{ instrument.location || '-' }}</td>
-          </tr>
-          <tr>
-            <td style="padding: 8px 0"><strong>Последний поверитель</strong></td>
-            <td>{{ instrument.verifier || '-' }}</td>
-          </tr>
-        </tbody>
-      </table>
+            </template>
+            <template v-else>-</template>
+          </div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">Межповерочный интервал</div>
+          <div class="detail-value">{{ instrument.verificationInterval }} год(а)</div>
+          <div class="detail-label">Поверитель</div>
+          <div class="detail-value">{{ instrument.verifier || '-' }}</div>
+        </div>
+        <div class="detail-row">
+          <div class="detail-label">Табельный номер</div>
+          <div class="detail-value">{{ instrument.tabNumber || '-' }}</div>
+          <div class="detail-label">Примечание</div>
+          <div class="detail-value">{{ instrument.notes || '-' }}</div>
+        </div>
+      </div>
     </div>
 
-    <div>
+    <!-- История поверок -->
+    <div style="margin-top: 20px">
       <div
         style="
           display: flex;
@@ -129,7 +145,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSIStore } from '../stores/siStore'
 import type { MeasuringInstrument, Verification } from '../types/siTypes'
@@ -137,6 +153,12 @@ import SIForm from '../components/SIForm.vue'
 import VerificationForm from '../components/VerificationForm.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { formatDate, getDaysUntilVerification } from '@/utils/dateUtils'
+
+// Пропсы для встраивания в правую панель
+const props = defineProps<{
+  id?: number // ID для прямой загрузки (без маршрута)
+  embedded?: boolean // Режим встраивания (скрывает кнопку "Назад")
+}>()
 
 const route = useRoute()
 const router = useRouter()
@@ -149,6 +171,9 @@ const instrument = ref<MeasuringInstrument | null>(null)
 const verifications = ref<Verification[]>([])
 const lastVerificationDate = ref('')
 const nextVerificationDate = ref('')
+
+// Режим встраивания (если передан пропс embedded, то не показываем кнопку "Назад")
+const isEmbedded = computed(() => props.embedded === true)
 
 const canEdit = computed(() => {
   const user = localStorage.getItem('user')
@@ -165,7 +190,10 @@ const isWarning = computed(() => {
 })
 
 function loadData() {
-  const id = Number(route.params.id)
+  // Определяем ID: из пропса или из маршрута
+  const id = props.id || Number(route.params.id)
+  if (!id) return
+
   instrument.value = store.allInstruments.find((s: MeasuringInstrument) => s.id === id) || null
   if (instrument.value) {
     verifications.value = store.getVerificationsForSI(id)
@@ -192,7 +220,12 @@ async function writeOffInstrument() {
   )
   if (ok) {
     store.writeOffInstrument(instrument.value.id)
-    router.push('/si')
+    // Если в режиме встраивания, не делаем редирект
+    if (!isEmbedded.value) {
+      router.push('/si')
+    } else {
+      loadData() // просто обновляем данные
+    }
   }
 }
 
@@ -212,6 +245,23 @@ function refresh() {
   loadData()
 }
 
+// Следим за изменением пропса id
+watch(
+  () => props.id,
+  () => {
+    loadData()
+  },
+  { immediate: true },
+)
+
+// Следим за изменением маршрута
+watch(
+  () => route.params.id,
+  () => {
+    if (!props.id) loadData()
+  },
+)
+
 onMounted(() => {
   loadData()
   window.addEventListener('si-saved', refresh)
@@ -227,5 +277,34 @@ onMounted(() => {
 .result-bad {
   color: #c0392b;
   font-weight: 500;
+}
+.card-detail-grid {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+}
+.detail-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.detail-row {
+  display: grid;
+  grid-template-columns: 180px 1fr 180px 1fr;
+  gap: 16px;
+  align-items: baseline;
+}
+.detail-label {
+  font-weight: 600;
+  color: #2c3e50;
+}
+.detail-value {
+  color: #1a2a3a;
+}
+@media (max-width: 768px) {
+  .detail-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
 }
 </style>

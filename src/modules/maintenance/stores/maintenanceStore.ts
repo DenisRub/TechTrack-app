@@ -35,6 +35,7 @@ const mockPlans: MaintenancePlan[] = [
     createdAt: '2025-01-01',
     updatedAt: '2025-01-01',
     isDeleted: false,
+    subsystemId: 1,
   },
   {
     id: 2,
@@ -45,6 +46,7 @@ const mockPlans: MaintenancePlan[] = [
     createdAt: '2024-01-01',
     updatedAt: '2024-01-01',
     isDeleted: false,
+    subsystemId: 1,
   },
 ]
 
@@ -223,6 +225,7 @@ export const useMaintenanceStore = defineStore('maintenance', () => {
       startDate,
       endDate,
       description: `Автоматически сформированный план технического обслуживания на ${yearNum} год на основе анализа ресурсов, СИ и истории ТО.`,
+      subsystemId: 0,
     }
   }
 

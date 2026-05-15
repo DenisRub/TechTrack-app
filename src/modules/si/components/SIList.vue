@@ -6,6 +6,7 @@
         <button v-if="canEdit" class="btn btn-primary btn-fixed" @click="openAddForm">
           + Добавить СИ
         </button>
+        <button class="btn btn-secondary btn-fixed" @click="openColumnSettings">⚙️ Колонки</button>
         <button class="btn btn-secondary btn-fixed" @click="openExportDialog">📎 Экспорт</button>
       </div>
     </div>
@@ -14,9 +15,9 @@
       <input
         v-model="filters.search"
         type="text"
-        placeholder="Поиск по номеру/наименованию"
+        placeholder="Поиск по наименованию, производителю, марке..."
         class="form-control"
-        style="width: 250px"
+        style="width: 300px"
         @input="onSearchInput"
       />
       <select
@@ -38,59 +39,56 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th @click="sort('id')">№ п/п</th>
-            <th @click="sort('tabNumber')">Табельный номер</th>
-            <th @click="sort('name')">Наименование</th>
-            <th @click="sort('location')">Местоположение</th>
-            <th @click="sort('lastVerificationDate')">Последняя поверка</th>
-            <th @click="sort('nextVerificationDate')">Следующая поверка</th>
-            <th @click="sort('status')">Статус</th>
+            <th v-for="colKey in visibleOrderedColumns" :key="colKey" @click="sort(colKey)">
+              {{ getColumnLabel(colKey) }}
+              <span v-if="sortField === colKey">{{ sortDir === 'asc' ? '↑' : '↓' }}</span>
+            </th>
             <th>Действия</th>
           </tr>
         </thead>
-
-        <tr v-for="si in sortedList" :key="si.id" :class="getRowClass(si)" :title="getTooltip(si)">
-          <td>{{ si.id }}</td>
-          <td>{{ si.tabNumber }}</td>
-          <td>{{ si.name }}</td>
-          <td>{{ si.location || '-' }}</td>
-          <td>
-            {{ getLastVerificationDate(si.id) ? formatDate(getLastVerificationDate(si.id)) : '-' }}
-          </td>
-          <td>
-            {{ getNextVerificationDate(si.id) ? formatDate(getNextVerificationDate(si.id)) : '-' }}
-          </td>
-          <td>{{ si.status }}</td>
-          <td class="actions-cell">
-            <button class="btn btn-sm btn-secondary" @click="viewCard(si.id)">Просмотр</button>
-            <button
-              v-if="canEdit && si.status !== 'выведено'"
-              class="btn btn-sm btn-secondary"
-              @click="editSI(si)"
-            >
-              ✏️
-            </button>
-            <button
-              v-if="canEdit && si.status !== 'выведено'"
-              class="btn btn-sm btn-danger"
-              @click="writeOffSI(si.id)"
-            >
-              📝 Списать
-            </button>
-            <span v-if="si.status === 'выведено'" class="badge-disabled">Списан</span>
-          </td>
-        </tr>
-
-        <tr v-if="sortedList.length === 0">
-          <td colspan="8" style="text-align: center">Нет данных</td>
-        </tr>
+        <tbody>
+          <tr
+            v-for="si in sortedList"
+            :key="si.id"
+            :class="getRowClass(si)"
+            :title="getTooltip(si)"
+          >
+            <td v-for="colKey in visibleOrderedColumns" :key="colKey">
+              {{ formatCell(si, colKey) }}
+            </td>
+            <td class="actions-cell">
+              <button class="btn btn-sm btn-secondary" @click="viewCard(si.id)">Просмотр</button>
+              <button
+                v-if="canEdit && si.status !== 'выведено'"
+                class="btn btn-sm btn-secondary"
+                @click="editSI(si)"
+              >
+                ✏️
+              </button>
+              <button
+                v-if="canEdit && si.status !== 'выведено'"
+                class="btn btn-sm btn-danger"
+                @click="writeOffSI(si.id)"
+              >
+                📝 Списать
+              </button>
+              <span v-if="si.status === 'выведено'" class="badge-disabled">Списан</span>
+            </td>
+          </tr>
+          <tr v-if="sortedList.length === 0">
+            <td :colspan="visibleOrderedColumns.length + 1" style="text-align: center">
+              Нет данных
+            </td>
+          </tr>
+        </tbody>
       </table>
     </div>
 
     <SIForm ref="siFormRef" @si-saved="refresh" />
     <VerificationForm ref="verFormRef" @verification-saved="refresh" />
-    <ExportDialog ref="exportDialogRef" :data="sortedList" />
+    <ExportDialog ref="exportDialogRef" :data="exportDataList" />
     <ConfirmDialog ref="confirmDialog" />
+    <ColumnSettings ref="columnSettingsRef" />
   </div>
 </template>
 
@@ -103,20 +101,134 @@ import SIForm from './SIForm.vue'
 import VerificationForm from './VerificationForm.vue'
 import ExportDialog from './ExportDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import ColumnSettings from './ColumnSettings.vue'
 import { formatDate, getDaysUntilVerification } from '@/utils/dateUtils'
 
 const router = useRouter()
 const store = useSIStore()
+const columnSettingsRef = ref()
 
-type SortableKey =
-  | 'id'
-  | 'tabNumber'
-  | 'name'
-  | 'location'
-  | 'status'
-  | 'lastVerificationDate'
-  | 'nextVerificationDate'
+// ========== Настройка колонок ==========
+const COLUMN_LABELS: Record<string, string> = {
+  name: 'Наименование',
+  manufacturer: 'Производитель',
+  model: 'Марка',
+  serialNumber: 'Зав. №',
+  inventoryNumber: 'Инв. №',
+  tabNumber: 'Таб. №',
+  status: 'Статус', // изменено
+  lastVerificationDate: 'Дата поверки',
+  nextVerificationDate: 'Следующая поверка',
+  verificationInterval: 'Межповерочный интервал',
+  location: 'Размещение',
+  notes: 'Примечание',
+}
 
+type ColumnKey = keyof typeof COLUMN_LABELS
+
+const allColumnKeys: ColumnKey[] = [
+  'name',
+  'manufacturer',
+  'model',
+  'serialNumber',
+  'inventoryNumber',
+  'tabNumber',
+  'status', // изменено
+  'lastVerificationDate',
+  'nextVerificationDate',
+  'verificationInterval',
+  'location',
+  'notes',
+]
+
+const visibleColumns = ref<Record<ColumnKey, boolean>>({
+  name: true,
+  manufacturer: true,
+  model: true,
+  serialNumber: true,
+  inventoryNumber: true,
+  tabNumber: true,
+  status: true, // изменено
+  lastVerificationDate: true,
+  nextVerificationDate: true,
+  verificationInterval: true,
+  location: true,
+  notes: true,
+})
+
+const columnOrder = ref<ColumnKey[]>([
+  'name',
+  'manufacturer',
+  'model',
+  'serialNumber',
+  'inventoryNumber',
+  'tabNumber',
+  'status', // изменено
+  'lastVerificationDate',
+  'nextVerificationDate',
+  'verificationInterval',
+  'location',
+  'notes',
+])
+
+function loadColumnSettings() {
+  const saved = localStorage.getItem('si_column_visibility')
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved)
+      for (const key of allColumnKeys) {
+        if (typeof parsed[key] === 'boolean') {
+          visibleColumns.value[key] = parsed[key]
+        }
+      }
+    } catch (e) {}
+  }
+  const savedOrder = localStorage.getItem('si_column_order')
+  if (savedOrder) {
+    try {
+      const parsed = JSON.parse(savedOrder)
+      if (Array.isArray(parsed) && parsed.length) {
+        columnOrder.value = parsed.filter((k: string) => allColumnKeys.includes(k as ColumnKey))
+      }
+    } catch (e) {}
+  }
+}
+
+function getColumnLabel(key: ColumnKey): string {
+  return COLUMN_LABELS[key] || key
+}
+
+const visibleOrderedColumns = computed(() => {
+  return columnOrder.value.filter((key) => visibleColumns.value[key])
+})
+
+function openColumnSettings() {
+  columnSettingsRef.value?.open()
+}
+
+function onColumnSettingsChange() {
+  loadColumnSettings()
+}
+
+// ========== Форматирование ячеек ==========
+function formatCell(si: MeasuringInstrument, key: ColumnKey): string {
+  if (key === 'lastVerificationDate') {
+    const date = getLastVerificationDate(si.id)
+    return date ? formatDate(date) : '-'
+  }
+  if (key === 'nextVerificationDate') {
+    const date = getNextVerificationDate(si.id)
+    return date ? formatDate(date) : '-'
+  }
+  if (key === 'verificationInterval') {
+    return `${si.verificationInterval} год`
+  }
+  const value = (si as any)[key]
+  if (value === undefined || value === null) return '-'
+  return String(value)
+}
+
+// ========== Остальной код ==========
 const siFormRef = ref<InstanceType<typeof SIForm>>()
 const verFormRef = ref<InstanceType<typeof VerificationForm>>()
 const exportDialogRef = ref<InstanceType<typeof ExportDialog>>()
@@ -124,6 +236,9 @@ const confirmDialog = ref<InstanceType<typeof ConfirmDialog>>()
 
 const filters = ref<FilterParams>({ search: '', status: '' })
 let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+type SortableKey = ColumnKey | 'id'
+
 const sortField = ref<SortableKey>('tabNumber')
 const sortDir = ref<'asc' | 'desc'>('asc')
 
@@ -175,24 +290,18 @@ const sortedList = computed(() => {
     if (field === 'id') {
       valA = a.id
       valB = b.id
-    } else if (field === 'tabNumber') {
-      valA = a.tabNumber || ''
-      valB = b.tabNumber || ''
-    } else if (field === 'name') {
-      valA = a.name || ''
-      valB = b.name || ''
-    } else if (field === 'location') {
-      valA = a.location || ''
-      valB = b.location || ''
-    } else if (field === 'status') {
-      valA = a.status || ''
-      valB = b.status || ''
     } else if (field === 'lastVerificationDate') {
       valA = getLastVerificationDate(a.id) || ''
       valB = getLastVerificationDate(b.id) || ''
     } else if (field === 'nextVerificationDate') {
       valA = getNextVerificationDate(a.id) || ''
       valB = getNextVerificationDate(b.id) || ''
+    } else if (field === 'verificationInterval') {
+      valA = a.verificationInterval
+      valB = b.verificationInterval
+    } else {
+      valA = (a as any)[field] || ''
+      valB = (b as any)[field] || ''
     }
 
     if (typeof valA === 'number' && typeof valB === 'number') {
@@ -309,17 +418,22 @@ function refresh() {
   applyFilters()
 }
 
-function openExportDialog() {
-  const enrichedData = sortedList.value.map((si) => ({
+const exportDataList = computed(() => {
+  return sortedList.value.map((si) => ({
     ...si,
     lastVerificationDate: getLastVerificationDate(si.id),
     nextVerificationDate: getNextVerificationDate(si.id),
   }))
-  exportDialogRef.value?.open(enrichedData)
+})
+
+function openExportDialog() {
+  exportDialogRef.value?.open(exportDataList.value)
 }
 
 onMounted(() => {
+  loadColumnSettings()
   applyFilters()
+  window.addEventListener('column-settings-changed', onColumnSettingsChange)
 })
 </script>
 
