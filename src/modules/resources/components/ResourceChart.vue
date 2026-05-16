@@ -1,207 +1,355 @@
 <template>
-  <div class="chart-container">
-    <div class="chart-header">
-      <h4>Динамика изменения ресурса</h4>
-      <select v-model="selectedParamId" class="form-control chart-select" @change="onParamChange">
-        <option :value="null" disabled>-- Выберите параметр --</option>
-        <option v-for="p in availableParams" :key="p.id" :value="p.id">
-          {{ p.name }} ({{ p.unit }})
-        </option>
-      </select>
+  <div class="card" v-if="resource">
+    <div class="card-header">
+      <h2>{{ resource.name }}</h2>
+      <div class="header-buttons">
+        <button class="btn btn-secondary" @click="goBack">← Назад</button>
+        <button v-if="canEdit" class="btn btn-primary" @click="editResource">Редактировать</button>
+        <button v-if="canEdit" class="btn btn-danger" @click="deleteResource">Списать</button>
+        <div class="dropdown">
+          <button class="btn btn-secondary" @click="toggleExportDropdown">📎 Экспорт</button>
+          <div v-if="exportDropdownOpen" class="dropdown-menu">
+            <button class="dropdown-item" @click="exportToExcel">Excel</button>
+            <button class="dropdown-item" @click="exportToWord">Word</button>
+          </div>
+        </div>
+      </div>
     </div>
-    <canvas ref="chartCanvas" class="chart-canvas"></canvas>
-    <div v-if="!hasData" class="chart-empty">
-      Нет данных для отображения графика<br />
-      <small>Добавьте параметры "Емкость", "Напряжение" или "Внутреннее сопротивление"</small>
+
+    <!-- Основные сведения -->
+    <div class="info-grid">
+      <div class="info-row">
+        <div class="info-label">Наименование</div>
+        <div class="info-value">{{ resource.name }}</div>
+        <div class="info-label">Марка</div>
+        <div class="info-value">{{ resource.mark || '-' }}</div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Тип</div>
+        <div class="info-value">{{ resource.type || '-' }}</div>
+        <div class="info-label">Дата производства</div>
+        <div class="info-value">{{ resource.productionDate || '-' }}</div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Узел</div>
+        <div class="info-value">{{ resource.nodeName || '-' }}</div>
+        <div class="info-label">Срок службы</div>
+        <div class="info-value">{{ resource.serviceLife ? resource.serviceLife + ' лет' : '-' }}</div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Дата регистрации</div>
+        <div class="info-value">{{ resource.registrationDate }}</div>
+        <div class="info-label">Учётный номер</div>
+        <div class="info-value">{{ resource.registrationNumber || '-' }}</div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Дата последнего ТО</div>
+        <div class="info-value">{{ resource.lastServiceDate || '-' }}</div>
+        <div class="info-label">Срок до ТО</div>
+        <div class="info-value">{{ resource.timeToService ? resource.timeToService + ' лет' : '-' }}</div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Исходный ресурс</div>
+        <div class="info-value">{{ resource.initialResource || '-' }}</div>
+        <div class="info-label">Остаточный ресурс</div>
+        <div class="info-value">{{ resource.remainingResource || '-' }}</div>
+      </div>
+      <div class="info-row">
+        <div class="info-label">Установлен в</div>
+        <div class="info-value">{{ resource.installedIn || '-' }}</div>
+      </div>
     </div>
+
+    <!-- Предупреждения -->
+    <div v-if="alerts.length" class="alerts-section">
+      <h4>⚠️ Предупреждения</h4>
+      <ul>
+        <li v-for="(alert, idx) in alerts" :key="idx" :class="alert.type">{{ alert.message }}</li>
+      </ul>
+    </div>
+
+    <!-- Параметры -->
+    <h3>Параметры</h3>
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Параметр</th>
+            <th>Значение</th>
+            <th>Ед. изм.</th>
+            <th>Основной</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="param in parameters" :key="param.id">
+            <td>{{ param.name }}</td>
+            <td>{{ param.value }}</td>
+            <td>{{ param.unit }}</td>
+            <td>{{ param.isMain ? '✅' : '' }}</td>
+          </tr>
+          <tr v-if="parameters.length === 0">
+            <td colspan="4">Нет параметров</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- График -->
+    <div class="chart-section" v-if="hasChartData">
+      <h3>Динамика изменения ресурса</h3>
+      <canvas ref="chartCanvas" class="chart-canvas"></canvas>
+      <div class="chart-controls">
+        <select v-model="selectedParam" class="form-control">
+          <option value="U">Напряжение (U), В</option>
+          <option value="R">Сопротивление (R), Ом</option>
+          <option value="E">Ёмкость (E), Втч</option>
+          <option value="C">Ёмкость (C), мАч</option>
+        </select>
+      </div>
+    </div>
+    <div v-else class="empty-message">Нет данных для построения графика</div>
+
+    <!-- Примечания -->
+    <div class="notes-section" v-if="resource.notes">
+      <h4>Примечания</h4>
+      <p>{{ resource.notes }}</p>
+    </div>
+
+    <div class="text-muted">
+      <small>Создан: {{ resource.createdAt }} | Обновлён: {{ resource.updatedAt }}</small>
+    </div>
+
+    <ResourceForm ref="formRef" @saved="refresh" />
+    <ConfirmDialog ref="confirmDialog" />
   </div>
+  <div v-else class="card">Загрузка...</div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
-import { useResourcesStore } from '../stores/resourcesStore'
+import { ref, computed, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { useResourcesStore } from '../stores/resourcesStore';
+import ResourceForm from './ResourceForm.vue';
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
+import { formatDate } from '@/utils/dateUtils';
+import * as XLSX from 'xlsx';
 
-const props = defineProps<{
-  resourceId: number
-}>()
+const route = useRoute();
+const router = useRouter();
+const store = useResourcesStore();
+const formRef = ref();
+const confirmDialog = ref();
+const exportDropdownOpen = ref(false);
+const chartCanvas = ref<HTMLCanvasElement | null>(null);
+let chartInstance: any = null;
+const selectedParam = ref('U');
 
-const store = useResourcesStore()
-const chartCanvas = ref<HTMLCanvasElement | null>(null)
-let chartInstance: any = null
-const selectedParamId = ref<number | null>(null)
-const hasData = ref(false)
-let ChartJS: any = null
+const resource = ref<any>(null);
+const parameters = ref<any[]>([]);
+const measurements = ref<any[]>([]);
 
-// Получаем параметры ресурса из store
-const parameters = computed(() => store.getParametersForResource(props.resourceId))
-
-// Доступные параметры для графика (ёмкость, напряжение, сопротивление)
-const availableParams = computed(() => {
-  return parameters.value.filter(
-    (p) => p.name === 'Емкость' || p.name === 'Напряжение' || p.name === 'Внутреннее сопротивление',
-  )
-})
-
-// Мок-данные для графика (в реальном приложении – из истории измерений)
-const getMockHistory = (paramName: string) => {
-  const histories: Record<string, { labels: string[]; values: number[] }> = {
-    Емкость: {
-      labels: ['Янв 2024', 'Мар 2024', 'Май 2024', 'Июл 2024', 'Сен 2024', 'Ноя 2024', 'Янв 2025'],
-      values: [95, 92, 88, 85, 82, 80, 78],
-    },
-    Напряжение: {
-      labels: ['Янв 2024', 'Мар 2024', 'Май 2024', 'Июл 2024', 'Сен 2024', 'Ноя 2024', 'Янв 2025'],
-      values: [12.5, 12.4, 12.3, 12.2, 12.1, 12.0, 11.9],
-    },
-    'Внутреннее сопротивление': {
-      labels: ['Янв 2024', 'Мар 2024', 'Май 2024', 'Июл 2024', 'Сен 2024', 'Ноя 2024', 'Янв 2025'],
-      values: [0.018, 0.019, 0.02, 0.022, 0.024, 0.026, 0.028],
-    },
-  }
-  return histories[paramName] || { labels: [], values: [] }
-}
-
-async function loadChartLibrary() {
-  if (ChartJS) return ChartJS
+const canEdit = computed(() => {
+  const user = localStorage.getItem('user');
+  if (!user) return false;
   try {
-    const module = await import('chart.js')
-    ChartJS = module
-    return module
-  } catch (error) {
-    console.error('Не удалось загрузить chart.js:', error)
-    return null
+    const role = JSON.parse(user).role;
+    return role === 'operator' || role === 'admin';
+  } catch { return false; }
+});
+
+const hasChartData = computed(() => measurements.value.length > 0);
+
+const alerts = computed(() => {
+  const result: { type: string; message: string }[] = [];
+  if (!resource.value) return result;
+  if (resource.value.timeToService !== undefined && resource.value.timeToService < 0) {
+    result.push({ type: 'danger', message: '🔴 Срок до ТО просрочен!' });
+  } else if (resource.value.timeToService !== undefined && resource.value.timeToService < 1) {
+    result.push({ type: 'warning', message: `⚠️ Срок до ТО менее года (${resource.value.timeToService} лет)` });
+  }
+  if (resource.value.serviceLife) {
+    const yearsPassed = new Date().getFullYear() - new Date(resource.value.registrationDate).getFullYear();
+    const remaining = resource.value.serviceLife - yearsPassed;
+    if (remaining < 0) {
+      result.push({ type: 'danger', message: '🔴 Срок службы истёк!' });
+    } else if (remaining < 1) {
+      result.push({ type: 'warning', message: `⚠️ Срок службы истекает (осталось ${remaining} лет)` });
+    }
+  }
+  const remainingPercent = parseFloat(resource.value.remainingResource || '0');
+  if (remainingPercent <= 0) {
+    result.push({ type: 'danger', message: '🔴 Ресурс исчерпан!' });
+  } else if (remainingPercent < 20) {
+    result.push({ type: 'warning', message: `⚠️ Остаточный ресурс менее 20% (${remainingPercent}%)` });
+  }
+  return result;
+});
+
+function loadData() {
+  const id = Number(route.params.id);
+  resource.value = store.resources.find(r => r.id === id);
+  if (resource.value) {
+    parameters.value = store.getParametersForResource(id);
+    measurements.value = store.getMeasurementsForResource(id);
   }
 }
 
 async function renderChart() {
-  if (!chartCanvas.value) return
-  if (!selectedParamId.value) return
-
-  const param = parameters.value.find((p) => p.id === selectedParamId.value)
-  if (!param) {
-    hasData.value = false
-    return
-  }
-
-  const history = getMockHistory(param.name)
-  if (history.labels.length === 0) {
-    hasData.value = false
-    return
-  }
-
-  hasData.value = true
-
-  const chartModule = await loadChartLibrary()
-  if (!chartModule) {
-    console.error('Chart.js не загружен')
-    return
-  }
-
-  const { Chart, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } =
-    chartModule
-  Chart.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend)
-
-  if (chartInstance) chartInstance.destroy()
-
-  const ctx = chartCanvas.value.getContext('2d')
-  if (!ctx) return
-
-  chartInstance = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: history.labels,
-      datasets: [
-        {
-          label: `${param.name} (${param.unit})`,
-          data: history.values,
+  if (!chartCanvas.value || measurements.value.length === 0) return;
+  const sorted = [...measurements.value].sort((a, b) => new Date(a.measurementDate).getTime() - new Date(b.measurementDate).getTime());
+  const labels = sorted.map(m => formatDate(m.measurementDate));
+  const data = sorted.map(m => m.parameters?.[selectedParam.value] || 0);
+  try {
+    const { Chart, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } = await import('chart.js');
+    Chart.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+    if (chartInstance) chartInstance.destroy();
+    const ctx = chartCanvas.value.getContext('2d');
+    if (!ctx) return;
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: selectedParam.value === 'U' ? 'Напряжение' : selectedParam.value === 'R' ? 'Сопротивление' : selectedParam.value === 'E' ? 'Ёмкость (Втч)' : 'Ёмкость (мАч)',
+          data,
           borderColor: '#2c5f8a',
-          backgroundColor: 'rgba(44, 95, 138, 0.1)',
+          backgroundColor: 'rgba(44,95,138,0.1)',
           tension: 0.3,
           fill: true,
           pointBackgroundColor: '#2c5f8a',
           pointBorderColor: '#fff',
           pointRadius: 5,
           pointHoverRadius: 7,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'top' },
-        tooltip: { mode: 'index', intersect: false },
+        }]
       },
-      scales: {
-        y: {
-          beginAtZero: false,
-          title: { display: true, text: param.unit },
-        },
-        x: {
-          title: { display: true, text: 'Дата' },
-        },
-      },
-    },
-  })
+      options: { responsive: true, maintainAspectRatio: false }
+    });
+  } catch (error) { console.error('Chart error:', error); }
 }
 
-function onParamChange() {
-  if (selectedParamId.value) {
-    renderChart()
-  }
+function exportToExcel() {
+  if (!resource.value) return;
+  const wsData = [
+    [`Ресурс: ${resource.value.name}`], [],
+    ['Параметр', 'Значение', 'Ед. изм.', 'Основной'],
+    ...parameters.value.map(p => [p.name, p.value, p.unit, p.isMain ? 'Да' : 'Нет']), [],
+    ['История измерений'], ['Дата', 'U, В', 'R, Ом', 'E, Втч', 'C, мАч'],
+    ...measurements.value.map(m => [formatDate(m.measurementDate), m.parameters?.U || '-', m.parameters?.R || '-', m.parameters?.E || '-', m.parameters?.C || '-'])
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, resource.value.name);
+  XLSX.writeFile(wb, `${resource.value.name}.xlsx`);
+  exportDropdownOpen.value = false;
 }
 
-// Следим за изменением выбранного параметра
-watch(selectedParamId, () => {
-  if (selectedParamId.value) renderChart()
-})
+function exportToWord() {
+  if (!resource.value) return;
+  let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${resource.value.name}</title><style>body{font-family:Arial;} table{border-collapse:collapse;width:100%} th,td{border:1px solid #000;padding:6px;text-align:left}</style></head><body>`;
+  html += `<h1>${resource.value.name}</h1>`;
+  html += `<h2>Основные сведения</h2><table><tr><th>Наименование</th><td>${resource.value.name}</td><th>Марка</th><td>${resource.value.mark || '-'}</td></tr>`;
+  html += `<tr><th>Тип</th><td>${resource.value.type || '-'}</td><th>Дата производства</th><td>${resource.value.productionDate || '-'}</td></tr>`;
+  html += `<tr><th>Узел</th><td>${resource.value.nodeName || '-'}</td><th>Срок службы</th><td>${resource.value.serviceLife ? resource.value.serviceLife + ' лет' : '-'}</td></tr>`;
+  html += `<tr><th>Дата регистрации</th><td>${resource.value.registrationDate}</td><th>Учётный номер</th><td>${resource.value.registrationNumber || '-'}</td></tr>`;
+  html += `<tr><th>Дата последнего ТО</th><td>${resource.value.lastServiceDate || '-'}</td><th>Срок до ТО</th><td>${resource.value.timeToService ? resource.value.timeToService + ' лет' : '-'}</td></tr>`;
+  html += `<tr><th>Исходный ресурс</th><td>${resource.value.initialResource || '-'}</td><th>Остаточный ресурс</th><td>${resource.value.remainingResource || '-'}</td></tr>`;
+  html += `<tr><th>Установлен в</th><td colspan="3">${resource.value.installedIn || '-'}</td></tr></table>`;
+  html += `<h2>Параметры</h2><table><tr><th>Параметр</th><th>Значение</th><th>Ед. изм.</th><th>Основной</th></tr>`;
+  parameters.value.forEach(p => { html += `<tr><td>${p.name}</td><td>${p.value}</td><td>${p.unit}</td><td>${p.isMain ? 'Да' : 'Нет'}</td></tr>`; });
+  html += `</table><h2>История измерений</h2><table><tr><th>Дата</th><th>U, В</th><th>R, Ом</th><th>E, Втч</th><th>C, мАч</th></tr>`;
+  measurements.value.forEach(m => { html += `<tr><td>${formatDate(m.measurementDate)}</td><td>${m.parameters?.U || '-'}</td><td>${m.parameters?.R || '-'}</td><td>${m.parameters?.E || '-'}</td><td>${m.parameters?.C || '-'}</td></tr>`; });
+  html += `</table></body></html>`;
+  const blob = new Blob([html], { type: 'application/msword' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `${resource.value.name}.doc`;
+  link.click();
+  URL.revokeObjectURL(link);
+  exportDropdownOpen.value = false;
+}
 
-// При монтировании выбираем первый доступный параметр
-onMounted(async () => {
-  // Исправление: безопасная проверка наличия элементов в массиве
-  if (availableParams.value && availableParams.value.length > 0) {
-    const firstParam = availableParams.value[0]
-    if (firstParam && firstParam.id) {
-      selectedParamId.value = firstParam.id
-      await renderChart()
-    }
-  }
-})
+function goBack() { router.back(); }
+function editResource() { formRef.value?.open(resource.value); }
+async function deleteResource() {
+  const ok = await confirmDialog.value?.show('Списание', 'Списать ресурс?');
+  if (ok) { store.deleteResource(resource.value.id); router.back(); }
+}
+function refresh() { loadData(); }
+function toggleExportDropdown() { exportDropdownOpen.value = !exportDropdownOpen.value; }
+
+watch(selectedParam, () => renderChart());
+onMounted(() => {
+  loadData();
+  window.addEventListener('resource-saved', refresh);
+});
 </script>
 
 <style scoped>
-.chart-container {
-  margin-top: 20px;
-  padding: 15px;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #e0e4e8;
-}
-.chart-header {
+.card-header {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 15px;
-  margin-bottom: 15px;
-  flex-wrap: wrap;
+  margin-bottom: 20px;
 }
-.chart-select {
-  width: 250px;
+.header-buttons {
+  display: flex;
+  gap: 10px;
 }
-.chart-canvas {
-  width: 100%;
-  height: 300px;
-  min-height: 300px;
-}
-.chart-empty {
-  text-align: center;
-  padding: 60px 20px;
-  color: #999;
-  background: #f8f9fa;
+.info-grid {
+  border: 1px solid #e0e4e8;
   border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 20px;
 }
-.chart-empty small {
+.info-row {
+  display: grid;
+  grid-template-columns: 150px 1fr 150px 1fr;
+  border-bottom: 1px solid #e0e4e8;
+}
+.info-row:last-child { border-bottom: none; }
+.info-label {
+  background-color: #f8f9fa;
+  padding: 10px 12px;
+  font-weight: 500;
+  border-right: 1px solid #e0e4e8;
+}
+.info-value { padding: 10px 12px; }
+.alerts-section {
+  background-color: #fff3e0;
+  border-left: 4px solid #e67e22;
+  padding: 12px;
+  margin-bottom: 20px;
+  border-radius: 4px;
+}
+.alerts-section .danger { color: #c0392b; }
+.chart-section { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; }
+.chart-canvas { width: 100%; height: 300px; }
+.chart-controls { margin-top: 10px; display: flex; justify-content: flex-end; }
+.chart-controls select { width: 200px; }
+.empty-message { text-align: center; padding: 40px; color: #999; }
+.notes-section { margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px; }
+.text-muted { color: #6c757d; margin-top: 15px; }
+.dropdown { position: relative; display: inline-block; }
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid #e0e4e8;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  z-index: 100;
+  min-width: 120px;
+}
+.dropdown-item {
   display: block;
-  margin-top: 10px;
-  color: #bbb;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
 }
+.dropdown-item:hover { background-color: #f0f2f5; }
 </style>
