@@ -34,6 +34,7 @@ function getCurrentDate(): string {
   return `${year}-${month}-${day}`;
 }
 
+<<<<<<< HEAD
 // Мок-данные – узлы (точное соответствие таблице Оборудование)
 const mockNodes: EquipmentNode[] = [
   // Пост контроля РО 147 (агрегат)
@@ -259,10 +260,77 @@ const mockNodes: EquipmentNode[] = [
     createdAt: '2024-01-01',
     updatedAt: '2024-01-01',
     isDeleted: false,
+=======
+// ========== МОК-ДАННЫЕ (используются только при первом запуске) ==========
+const mockNodes: EquipmentNode[] = [
+  {
+    id: 1,
+    name: 'Пост контроля АСКРО СЗЗ №9',
+    type: 'aggregate',
+    nodeTypeId: null,
+    parentId: null,
+    location: 'ПП №1',
+    characteristics: {},
+    createdAt: '2024-01-01',
+    updatedAt: '2024-01-01',
+    isDeleted: false,
+    manufacturer: 'НПП «Доза»',
+    model: 'АСКРО-СЗЗ',
+    serialNumber: '001',
+    inventoryNumber: 'ИНВ-001',
+    condition: 'в работе',
+    resource: '100%',
+    note: '',
+    subsystem: 'АСКРО ПП№1',
+    isSI: false,
+  },
+  {
+    id: 2,
+    name: 'Блок детектирования БДГ-01 №373',
+    type: 'block',
+    nodeTypeId: 1,
+    parentId: 1,
+    location: 'ПП №1',
+    characteristics: {},
+    createdAt: '2024-01-01',
+    updatedAt: '2024-01-01',
+    isDeleted: false,
+    manufacturer: 'НПП «Доза»',
+    model: 'БДГ-01',
+    serialNumber: '373',
+    inventoryNumber: 'ИНВ-002',
+    condition: 'в работе',
+    resource: '95%',
+    note: '',
+    subsystem: 'АСКРО ПП№1',
+    isSI: true,
+  },
+  {
+    id: 3,
+    name: 'Мобильный маршрутизатор iRZ RUH2b',
+    type: 'block',
+    nodeTypeId: 2,
+    parentId: 1,
+    location: 'ПП №1',
+    characteristics: {},
+    createdAt: '2024-01-01',
+    updatedAt: '2024-01-01',
+    isDeleted: false,
+    manufacturer: 'iRZ',
+    model: 'RUH2b',
+    serialNumber: 'SN123456',
+    inventoryNumber: 'ИНВ-003',
+    condition: 'в работе',
+    resource: '100%',
+    note: '',
+    subsystem: 'АСКРО ПП№1',
+    isSI: false,
+>>>>>>> 7f08f3931ee2e07c1174150a164d1a26ce9256b9
   },
 ];
 
 const mockResources: Resource[] = [
+<<<<<<< HEAD
   {
     id: 1,
     nodeId: 3,   // Аккумуляторная батарея CSB
@@ -310,6 +378,15 @@ const mockNodeTypes: NodeType[] = [
   { id: 2, name: 'Маршрутизатор', characteristicsTemplate: { модель: { value: '', unit: '', isMain: true }, порты: { value: '', unit: 'шт', isMain: true }, пропускная_способность: { value: '', unit: 'Мбит/с', isMain: false } }, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
   { id: 3, name: 'Блок питания', characteristicsTemplate: { напряжение: { value: '', unit: 'В', isMain: true }, ток: { value: '', unit: 'А', isMain: true }, мощность: { value: '', unit: 'Вт', isMain: true } }, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
   // ... остальные виды, если нужны
+=======
+  { id: 1, nodeId: 1, name: 'Остаточная ёмкость', value: 85, unit: '%', updatedAt: '2024-01-01' },
+  { id: 2, nodeId: 2, name: 'Чувствительность', value: 95, unit: '%', updatedAt: '2024-01-01' },
+];
+
+const mockNodeTypes: NodeType[] = [
+  { id: 1, name: 'Блок детектирования', characteristicsTemplate: { тип: 'гамма', чувствительность: '' }, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
+  { id: 2, name: 'Маршрутизатор', characteristicsTemplate: { модель: '', порты: '' }, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
+>>>>>>> 7f08f3931ee2e07c1174150a164d1a26ce9256b9
 ];
 
 export const useEquipmentStore = defineStore('equipment', () => {
@@ -529,9 +606,9 @@ export const useEquipmentStore = defineStore('equipment', () => {
     if (!old) return;
     resources.value[idx] = {
       id: old.id,
-      nodeId: data.nodeId ?? old.nodeId,
-      name: data.name ?? old.name,
-      value: data.value ?? old.value,
+      nodeId: data.nodeId !== undefined ? data.nodeId : old.nodeId,
+      name: data.name !== undefined ? data.name : old.name,
+      value: data.value !== undefined ? data.value : old.value,
       unit: data.unit !== undefined ? data.unit : old.unit,
       updatedAt: getCurrentDate(),
     };

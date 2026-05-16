@@ -1,105 +1,78 @@
 <template>
   <div class="card">
-    <div
-      style="
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-      "
-    >
-      <div style="display: flex; align-items: center; gap: 15px">
-        <button v-if="nodeId" class="btn btn-secondary" @click="goBackToEquipment">
-          ← Назад к узлу
-        </button>
-        <h2 style="margin: 0">Ресурсы оборудования</h2>
-      </div>
-      <div class="button-group">
-        <div class="dropdown">
-          <button class="btn btn-secondary" @click="toggleDropdown">📎 Экспорт</button>
-          <div v-if="dropdownOpen" class="dropdown-menu">
-            <button class="dropdown-item" @click="handleExportToExcel">
-              Microsoft Excel (.xlsx)
-            </button>
-            <button class="dropdown-item" @click="handleExportToWord">
-              Microsoft Word (.docx)
-            </button>
-          </div>
-        </div>
-        <button class="btn btn-secondary" @click="showColumnSettings = true">⚙️ Колонки</button>
-        <button class="btn btn-secondary" @click="showFilterPanel = !showFilterPanel">
-          🔍 Фильтр
-        </button>
-        <button class="btn btn-primary" @click="openAddForm">+ Добавить ресурс</button>
-      </div>
-    </div>
-
-    <!-- Панель фильтрации -->
-    <div v-if="showFilterPanel" class="filter-panel">
-      <div class="filter-row">
-        <select v-model="newFilter.field" class="form-control">
-          <option value="">-- Выберите поле --</option>
-          <option value="nodeName">Узел</option>
-          <option value="name">Наименование</option>
-          <option value="mark">Марка</option>
-          <option value="type">Тип</option>
-          <option value="timeToService">Срок до ТО</option>
-          <option value="remainingLife">Остаточный ресурс</option>
-          <option value="status">Статус</option>
-        </select>
-        <select v-model="newFilter.operator" class="form-control">
-          <option value="contains">Содержит</option>
-          <option value="equals">Равно</option>
-          <option value="greater">Больше</option>
-          <option value="less">Меньше</option>
-        </select>
-        <input v-model="newFilter.value" type="text" placeholder="Значение" class="form-control" />
-        <button class="btn btn-primary btn-sm" @click="addFilter">Найти</button>
-      </div>
-      <div class="filter-list" v-if="filters.length">
-        <span v-for="(f, idx) in filters" :key="idx" class="filter-tag">
-          {{ getFieldLabel(String(f.field)) }} {{ getOperatorLabel(f.operator) }} "{{ f.value }}"
-          <button class="filter-remove" @click="removeFilter(idx)">✖</button>
-        </span>
-        <button class="btn btn-sm btn-secondary" @click="clearFilters">Сбросить все</button>
+    <div class="resources-header">
+      <h2>Ресурсы</h2>
+      <div class="top-buttons">
+        <button class="btn btn-secondary btn-uniform" @click="openMeasurementsModal">📊 Журнал измерений</button>
+        <button class="btn btn-secondary btn-uniform" @click="openAddMeasurementModal">➕ Добавить измерение</button>
+        <button class="btn btn-secondary btn-uniform" @click="openAddForm">➕ Добавить ресурс</button>
       </div>
     </div>
 
     <!-- Блок предупреждений -->
-    <div v-if="alerts.length" class="alert-banner">
+    <div v-if="globalAlerts.length" class="alerts-section">
       <h4>⚠️ Предупреждения</h4>
       <ul>
-        <li v-for="(alert, idx) in alerts" :key="idx">{{ alert }}</li>
+        <li v-for="(alert, idx) in globalAlerts" :key="idx" :class="alert.type">{{ alert.message }}</li>
       </ul>
     </div>
+
+    <div class="bottom-buttons">
+      <button class="btn btn-secondary btn-uniform" @click="showFilterPanel = !showFilterPanel">🔍 Фильтрация</button>
+      <button class="btn btn-secondary btn-uniform" @click="showColumnSettings = true">⚙️ Колонки</button>
+      <div class="dropdown">
+        <button class="btn btn-secondary btn-uniform" @click="toggleDropdown">📎 Экспорт</button>
+        <div v-if="dropdownOpen" class="dropdown-menu">
+          <button class="dropdown-item" @click="exportToExcelFile">Microsoft Excel (.xlsx)</button>
+          <button class="dropdown-item" @click="exportToWordFile">Microsoft Word (.docx)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Фильтрация -->
+    <div v-if="showFilterPanel" class="filter-panel">
+      <div class="filter-row">
+        <input v-model="filters.name" placeholder="Наименование" class="form-control" />
+        <input v-model="filters.mark" placeholder="Марка" class="form-control" />
+        <input v-model="filters.registrationNumber" placeholder="Учётный №" class="form-control" />
+        <input v-model="filters.nodeName" placeholder="Размещение" class="form-control" />
+        <button class="btn btn-primary btn-sm" @click="applyFilters">Найти</button>
+        <button class="btn btn-secondary btn-sm" @click="resetFilters">Сбросить</button>
+      </div>
+    </div>
+
+    <!-- Таблица -->
     <div class="table-wrapper">
       <table class="data-table">
         <thead>
           <tr>
-            <th v-for="col in visibleColumns" :key="col.key" @click="handleSort(col.key, $event)">
+            <th v-for="col in visibleColumns" :key="col.key" @click="sortBy(col.key)">
               {{ col.label }}
-              <span v-if="getSortIcon(col.key)">{{ getSortIcon(col.key) }}</span>
+              <span v-if="sortField === col.key">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
             </th>
             <th>Действия</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="res in filteredAndSortedResources" :key="res.id" :class="getStatusClass(res)">
+          <tr v-for="res in sortedResources" :key="res.id" :class="getRowClass(res)">
             <td v-for="col in visibleColumns" :key="col.key">{{ formatCell(res, col.key) }}</td>
-            <td>
-              <button class="btn btn-sm btn-secondary" @click="viewCard(res.id)">Открыть</button>
-              <button class="btn btn-sm btn-secondary" @click="editResource(res)">✏️</button>
-              <button class="btn btn-sm btn-danger" @click="deleteResource(res.id)">🗑️</button>
+            <td class="actions-cell">
+              <button class="btn btn-sm btn-secondary" @click="viewCard(res.id)">Просмотр</button>
+              <template v-if="!res.isDeleted">
+                <button v-if="canEdit" class="btn btn-sm btn-secondary" @click="editResource(res)">✏️</button>
+                <button v-if="canEdit" class="btn btn-sm btn-danger" @click="deleteResource(res.id)">Списать</button>
+              </template>
+              <span v-else class="badge-disabled">Списан</span>
             </td>
           </tr>
-          <tr v-if="filteredAndSortedResources.length === 0">
-            <td :colspan="visibleColumns.length + 1">Нет данных</td>
+          <tr v-if="sortedResources.length === 0">
+            <td :colspan="visibleColumns.length + 1" style="text-align: center">Нет данных</td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- Модальное окно настройки колонок -->
+    <!-- Настройка колонок -->
     <div class="modal-overlay" v-if="showColumnSettings">
       <div class="modal-content">
         <div class="modal-header">Настройка колонок</div>
@@ -114,347 +87,205 @@
       </div>
     </div>
 
-    <!-- Модальные окна -->
     <ResourceForm ref="formRef" @saved="refresh" />
+    <MeasurementsModal ref="measurementsModalRef" @saved="refresh" />
+    <AddMeasurementModal ref="addMeasurementModalRef" @saved="refresh" />
     <ConfirmDialog ref="confirmDialog" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useResourcesStore } from '../stores/resourcesStore'
-import ResourceForm from '../components/ResourceForm.vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import { exportToExcel, exportToWord } from '@/utils/exportUtils'
+import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { useResourcesStore } from '../stores/resourcesStore';
+import ResourceForm from '../components/ResourceForm.vue';
+import MeasurementsModal from '../components/MeasurementsModal.vue';
+import AddMeasurementModal from '../components/AddMeasurementModal.vue';
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
+import { exportToExcel, exportToWord } from '@/utils/exportUtils';
 
-const route = useRoute()
-const router = useRouter()
-const store = useResourcesStore()
-const formRef = ref()
-const confirmDialog = ref()
+const router = useRouter();
+const store = useResourcesStore();
 
-// Определяем, перешли ли мы из карточки узла
-const nodeId = route.query.nodeId ? Number(route.query.nodeId) : null
-
-function goBackToEquipment() {
-  if (nodeId) {
-    router.push(`/equipment/${nodeId}`)
-  }
-}
-
-// ========== Выпадающее меню экспорта ==========
-const dropdownOpen = ref(false)
-function toggleDropdown() {
-  dropdownOpen.value = !dropdownOpen.value
-}
-
-// ========== Настройка колонок ==========
 const allColumns = [
-  { key: 'nodeName', label: 'Узел' },
   { key: 'name', label: 'Наименование' },
   { key: 'mark', label: 'Марка' },
-  { key: 'type', label: 'Тип' },
-  { key: 'timeToService', label: 'Срок до ТО' },
-  { key: 'remainingLife', label: 'Остаточный ресурс' },
-  { key: 'status', label: 'Статус' },
-  { key: 'nodeId', label: 'ID узла' },
-]
-const selectedColumns = ref([
-  'nodeName',
-  'name',
-  'mark',
-  'type',
-  'timeToService',
-  'remainingLife',
-  'status',
-])
-const showColumnSettings = ref(false)
-const visibleColumns = computed(() =>
-  allColumns.filter((c) => selectedColumns.value.includes(c.key)),
-)
+  { key: 'registrationNumber', label: 'Учётный №' },
+  { key: 'initialResource', label: 'Исходный ресурс' },
+  { key: 'remainingResource', label: 'Остаточный ресурс' },
+  { key: 'nodeName', label: 'Размещение' },
+  { key: 'notes', label: 'Примечание' },
+];
+const selectedColumns = ref(allColumns.map(c => c.key));
+const showColumnSettings = ref(false);
+const visibleColumns = computed(() => allColumns.filter(c => selectedColumns.value.includes(c.key)));
 
-// ========== Сортировка ==========
-type SortItem = { field: string; order: 'asc' | 'desc' }
-const sortStack = ref<SortItem[]>([{ field: 'nodeName', order: 'asc' }])
+const filters = ref({ name: '', mark: '', registrationNumber: '', nodeName: '' });
+const showFilterPanel = ref(false);
+const sortField = ref('name');
+const sortOrder = ref<'asc' | 'desc'>('asc');
+const dropdownOpen = ref(false);
 
-function handleSort(field: string, event: MouseEvent) {
-  if (event.shiftKey) {
-    const existing = sortStack.value.find((s) => s.field === field)
-    if (existing) existing.order = existing.order === 'asc' ? 'desc' : 'asc'
-    else sortStack.value.push({ field, order: 'asc' })
+const canEdit = computed(() => {
+  const user = localStorage.getItem('user');
+  if (!user) return false;
+  const role = JSON.parse(user).role;
+  return role === 'operator' || role === 'admin';
+});
+
+// Глобальные предупреждения
+const globalAlerts = computed(() => {
+  const alerts: { type: string; message: string }[] = [];
+  for (const res of store.resources) {
+    if (res.isDeleted) continue;
+    if (res.timeToService !== undefined && res.timeToService < 0) {
+      alerts.push({ type: 'danger', message: `${res.name}: срок до ТО просрочен!` });
+    } else if (res.timeToService !== undefined && res.timeToService < 1) {
+      alerts.push({ type: 'warning', message: `${res.name}: срок до ТО менее года (${res.timeToService} лет)` });
+    }
+    if (res.serviceLife) {
+      const yearsPassed = new Date().getFullYear() - new Date(res.registrationDate).getFullYear();
+      const remaining = res.serviceLife - yearsPassed;
+      if (remaining < 0) {
+        alerts.push({ type: 'danger', message: `${res.name}: срок службы истёк!` });
+      } else if (remaining < 1) {
+        alerts.push({ type: 'warning', message: `${res.name}: срок службы истекает (осталось ${remaining} лет)` });
+      }
+    }
+    const remainingPercent = parseFloat(res.remainingResource || '0');
+    if (remainingPercent <= 0) {
+      alerts.push({ type: 'danger', message: `${res.name}: ресурс исчерпан!` });
+    } else if (remainingPercent < 20) {
+      alerts.push({ type: 'warning', message: `${res.name}: остаточный ресурс менее 20% (${remainingPercent}%)` });
+    }
+  }
+  return alerts;
+});
+
+const filteredResources = computed(() => {
+  let list = [...store.resources];
+  const f = filters.value;
+  if (f.name) list = list.filter(r => r.name.toLowerCase().includes(f.name.toLowerCase()));
+  if (f.mark) list = list.filter(r => (r.mark || '').toLowerCase().includes(f.mark.toLowerCase()));
+  if (f.registrationNumber) list = list.filter(r => String(r.registrationNumber || '').includes(f.registrationNumber));
+  if (f.nodeName) list = list.filter(r => (r.nodeName || '').toLowerCase().includes(f.nodeName.toLowerCase()));
+  return list;
+});
+
+const sortedResources = computed(() => {
+  const list = [...filteredResources.value];
+  // Сначала активные, потом списанные
+  list.sort((a, b) => {
+    if (a.isDeleted !== b.isDeleted) {
+      return a.isDeleted ? 1 : -1;
+    }
+    let valA = a[sortField.value] || '';
+    let valB = b[sortField.value] || '';
+    if (typeof valA === 'string') valA = valA.toLowerCase();
+    if (typeof valB === 'string') valB = valB.toLowerCase();
+    if (valA < valB) return sortOrder.value === 'asc' ? -1 : 1;
+    if (valA > valB) return sortOrder.value === 'asc' ? 1 : -1;
+    return 0;
+  });
+  return list;
+});
+
+function formatCell(res: any, key: string) {
+  if (key === 'notes') return res.notes || '-';
+  const value = res[key];
+  return value === undefined || value === null ? '-' : value;
+}
+
+function getRowClass(res: any): string {
+  if (res.isDeleted) return 'disabled-row';
+  if (res.timeToService && res.timeToService < 0) return 'expired-row';
+  if (res.timeToService && res.timeToService < 1) return 'warning-row';
+  if (res.remainingResource && parseFloat(res.remainingResource) < 20) return 'warning-row';
+  if (res.remainingResource && parseFloat(res.remainingResource) <= 0) return 'expired-row';
+  return '';
+}
+
+function sortBy(field: string) {
+  if (sortField.value === field) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
   } else {
-    const existing = sortStack.value.find((s) => s.field === field)
-    if (existing && sortStack.value.length === 1)
-      existing.order = existing.order === 'asc' ? 'desc' : 'asc'
-    else sortStack.value = [{ field, order: 'asc' }]
+    sortField.value = field;
+    sortOrder.value = 'asc';
   }
 }
 
-function getSortIcon(field: string): string {
-  const entry = sortStack.value.find((s) => s.field === field)
-  if (!entry) return ''
-  return entry.order === 'asc' ? '↑' : '↓'
+function applyFilters() {}
+function resetFilters() {
+  filters.value = { name: '', mark: '', registrationNumber: '', nodeName: '' };
 }
-
-// ========== Фильтр ==========
-const showFilterPanel = ref(false)
-const filters = ref<{ field: string; operator: string; value: string }[]>([])
-const newFilter = ref({ field: '' as string, operator: 'contains', value: '' })
-
-function getFieldLabel(field: string): string {
-  const found = allColumns.find((c) => c.key === field)
-  return found ? found.label : field
-}
-function getOperatorLabel(op: string): string {
-  const labels: Record<string, string> = {
-    contains: 'содержит',
-    equals: 'равно',
-    greater: 'больше',
-    less: 'меньше',
-  }
-  return labels[op] || op
-}
-
-function addFilter() {
-  if (!newFilter.value.field || !newFilter.value.value) return
-  filters.value.push({ ...newFilter.value })
-  newFilter.value = { field: '', operator: 'contains', value: '' }
-}
-function removeFilter(idx: number) {
-  filters.value.splice(idx, 1)
-}
-function clearFilters() {
-  filters.value = []
-}
-
-// ========== Вычисляемые значения ==========
-function getRemainingLifeValue(res: any): number {
-  const param = store
-    .getParametersForResource(res.id)
-    .find((p) => p.name === 'Остаточный срок службы')
-  return param ? parseFloat(param.value as string) : -1
-}
-function getStatusTextValue(res: any): string {
-  const remaining = getRemainingLifeValue(res)
-  if (remaining < 0) return 'Нет данных'
-  if (remaining < 1) return 'Критический'
-  if (remaining < 2) return 'Внимание'
-  return 'Норма'
-}
-
-// ========== Фильтрация и сортировка данных ==========
-const filteredAndSortedResources = computed(() => {
-  let list = [...store.resources]
-
-  // Фильтры
-  for (const filter of filters.value) {
-    list = list.filter((res) => {
-      let value: any
-      if (filter.field === 'remainingLife') value = getRemainingLifeValue(res)
-      else if (filter.field === 'status') value = getStatusTextValue(res)
-      else if (filter.field === 'nodeId') value = res.nodeId
-      else value = (res as any)[filter.field] || ''
-      const filterValue = filter.value.toLowerCase()
-      const strValue = String(value).toLowerCase()
-      switch (filter.operator) {
-        case 'contains':
-          return strValue.includes(filterValue)
-        case 'equals':
-          return strValue === filterValue
-        case 'greater':
-          return parseFloat(strValue) > parseFloat(filterValue)
-        case 'less':
-          return parseFloat(strValue) < parseFloat(filterValue)
-        default:
-          return true
-      }
-    })
-  }
-
-  // Добавляем фильтр по nodeId из URL (если есть)
-  if (nodeId) {
-    list = list.filter((res) => res.nodeId === nodeId)
-  }
-
-  // Сортировка
-  if (sortStack.value.length) {
-    list.sort((a, b) => {
-      for (const sort of sortStack.value) {
-        let valA: any, valB: any
-        if (sort.field === 'remainingLife') {
-          valA = getRemainingLifeValue(a)
-          valB = getRemainingLifeValue(b)
-        } else if (sort.field === 'status') {
-          valA = getStatusTextValue(a)
-          valB = getStatusTextValue(b)
-        } else {
-          valA = (a as any)[sort.field] || ''
-          valB = (b as any)[sort.field] || ''
-        }
-        if (typeof valA === 'string') valA = valA.toLowerCase()
-        if (typeof valB === 'string') valB = valB.toLowerCase()
-        if (valA < valB) return sort.order === 'asc' ? -1 : 1
-        if (valA > valB) return sort.order === 'asc' ? 1 : -1
-      }
-      return 0
-    })
-  }
-  return list
-})
-
-function formatCell(res: any, key: string): string {
-  if (key === 'remainingLife') {
-    const val = getRemainingLifeValue(res)
-    return val >= 0 ? `${val} лет` : '-'
-  }
-  if (key === 'status') return getStatusTextValue(res)
-  if (key === 'timeToService') return res.timeToService ? `${res.timeToService} лет` : '-'
-  return res[key] || '-'
-}
-
-function getRemainingLife(res: any): string {
-  const val = getRemainingLifeValue(res)
-  return val >= 0 ? `${val} лет` : '-'
-}
-function getStatusText(res: any): string {
-  const remaining = getRemainingLifeValue(res)
-  if (remaining < 0) return 'Нет данных'
-  if (remaining < 1) return 'Критический'
-  if (remaining < 2) return 'Внимание'
-  return 'Норма'
-}
-function getStatusClass(res: any): string {
-  const status = getStatusText(res)
-  if (status === 'Критический') return 'row-critical'
-  if (status === 'Внимание') return 'row-warning'
-  return ''
-}
-
-// Предупреждения
-const alerts = computed(() => {
-  const result: string[] = []
-  for (const res of store.resources) {
-    if (res.timeToService && res.timeToService < 1) {
-      result.push(
-        `⚠️ ${res.nodeName} – ${res.name}: срок до ТО менее года (${res.timeToService} лет)`,
-      )
-    }
-    const remaining = getRemainingLife(res)
-    if (remaining !== '-') {
-      const years = parseFloat(remaining)
-      if (years < 1)
-        result.push(`🔴 ${res.nodeName} – ${res.name}: остаточный ресурс менее года (${remaining})`)
-      else if (years < 2)
-        result.push(
-          `🟡 ${res.nodeName} – ${res.name}: остаточный ресурс менее 2 лет (${remaining})`,
-        )
-    }
-  }
-  return result
-})
-
-// Автоматический расчёт
-function calculateAllResources() {
-  for (const res of store.resources) {
-    if (res.serviceLife && res.registrationDate) {
-      const yearsPassed = new Date().getFullYear() - new Date(res.registrationDate).getFullYear()
-      const remaining = Math.max(0, res.serviceLife - yearsPassed)
-      const existingParam = store
-        .getParametersForResource(res.id)
-        .find((p) => p.name === 'Остаточный срок службы')
-      if (existingParam) {
-        store.updateParameter(existingParam.id, { value: remaining.toFixed(1) })
-      } else {
-        store.addParameter({
-          resourceId: res.id,
-          name: 'Остаточный срок службы',
-          value: remaining.toFixed(1),
-          unit: 'лет',
-          isMain: true,
-        })
-      }
-    }
-  }
-}
-
-// Экспорт
-function getExportData() {
-  return filteredAndSortedResources.value.map((res) => ({
-    Узел: res.nodeName || `ID: ${res.nodeId}`,
-    Наименование: res.name,
-    Марка: res.mark || '',
-    Тип: res.type || '',
-    'Срок до ТО': res.timeToService ? `${res.timeToService} лет` : '',
-    'Остаточный ресурс': getRemainingLife(res),
-    Статус: getStatusText(res),
-  }))
-}
-
-function handleExportToExcel() {
-  const data = getExportData()
-  if (data.length === 0) {
-    alert('Нет данных для экспорта')
-    return
-  }
-  const filename = `Ресурсы_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`
-  exportToExcel(data, filename)
-  dropdownOpen.value = false
-}
-
-function handleExportToWord() {
-  const data = getExportData()
-  if (data.length === 0) {
-    alert('Нет данных для экспорта')
-    return
-  }
-  const firstItem = data[0]
-  if (!firstItem) return
-  const headers = Object.keys(firstItem)
-  const filename = `Ресурсы_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}`
-  exportToWord(data, headers, filename)
-  dropdownOpen.value = false
-}
-
-// CRUD
-function openAddForm() {
-  formRef.value?.open()
-}
-function editResource(res: any) {
-  formRef.value?.open(res)
-}
+function viewCard(id: number) { router.push(`/resources/${id}`); }
+function openAddForm() { formRef.value?.open(); }
+function editResource(res: any) { formRef.value?.open(res); }
 async function deleteResource(id: number) {
-  const ok = await confirmDialog.value?.show('Удаление', 'Удалить ресурс?')
-  if (ok) store.deleteResource(id)
+  const ok = await confirmDialog.value?.show('Списание', 'Списать ресурс?');
+  if (ok) store.deleteResource(id);
 }
-function viewCard(id: number) {
-  router.push(`/resources/${id}`)
-}
-function refresh() {
-  calculateAllResources()
+function refresh() {}
+
+function getExportData() {
+  return sortedResources.value.map(res => ({
+    'Наименование': res.name,
+    'Марка': res.mark || '-',
+    'Учётный №': res.registrationNumber || '-',
+    'Исходный ресурс': res.initialResource || '-',
+    'Остаточный ресурс': res.remainingResource || '-',
+    'Размещение': res.nodeName || '-',
+    'Примечание': res.notes || '-',
+  }));
 }
 
-function handleClickOutside(event: MouseEvent) {
-  const target = event.target as HTMLElement
-  if (!target.closest('.dropdown')) dropdownOpen.value = false
+function exportToExcelFile() {
+  const data = getExportData();
+  if (data.length === 0) { alert('Нет данных для экспорта'); return; }
+  const filename = `Ресурсы_${new Date().toISOString().slice(0, 10)}`;
+  exportToExcel(data, filename);
+  dropdownOpen.value = false;
 }
 
-onMounted(() => {
-  calculateAllResources()
-  document.addEventListener('click', handleClickOutside)
-})
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
-})
+function exportToWordFile() {
+  const data = getExportData();
+  if (data.length === 0) { alert('Нет данных для экспорта'); return; }
+  const headers = Object.keys(data[0]);
+  const filename = `Ресурсы_${new Date().toISOString().slice(0, 10)}`;
+  exportToWord(data, headers, filename);
+  dropdownOpen.value = false;
+}
+
+function openMeasurementsModal() { measurementsModalRef.value?.open(); }
+function openAddMeasurementModal() { addMeasurementModalRef.value?.open(); }
+function toggleDropdown() { dropdownOpen.value = !dropdownOpen.value; }
+
+const formRef = ref();
+const measurementsModalRef = ref();
+const addMeasurementModalRef = ref();
+const confirmDialog = ref();
 </script>
 
 <style scoped>
-/* все стили остаются без изменений, они уже есть в вашем коде */
-.button-group {
+.resources-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.top-buttons,
+.bottom-buttons {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  position: relative;
+}
+.btn-uniform {
+  padding: 8px 16px;
+  font-size: 14px;
+  min-width: 160px;
+  text-align: center;
 }
 .dropdown {
   position: relative;
@@ -495,48 +326,47 @@ onUnmounted(() => {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 10px;
 }
 .filter-row .form-control {
   width: auto;
   min-width: 150px;
 }
-.filter-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.filter-tag {
-  background: #e9ecef;
-  padding: 4px 8px;
-  border-radius: 16px;
-  font-size: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.filter-remove {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #c0392b;
-  font-weight: bold;
-}
-.alert-banner {
+.alerts-section {
   background-color: #fff3e0;
   border-left: 4px solid #e67e22;
   padding: 12px;
   margin-bottom: 20px;
   border-radius: 4px;
 }
-.alert-banner ul {
-  margin: 8px 0 0 20px;
+.alerts-section .danger {
+  color: #c0392b;
 }
-.row-critical {
+.warning-row {
+  background-color: #fff3e0;
+}
+.expired-row {
   background-color: #ffe0e0;
 }
-.row-warning {
-  background-color: #fff3e0;
+.disabled-row {
+  background-color: #f0f0f0;
+  color: #999;
+  opacity: 0.7;
+}
+.disabled-row:hover {
+  background-color: #e8e8e8;
+}
+.badge-disabled {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: #e9ecef;
+  color: #6c757d;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.actions-cell {
+  white-space: nowrap;
+}
+.actions-cell .btn {
+  margin-right: 4px;
 }
 </style>

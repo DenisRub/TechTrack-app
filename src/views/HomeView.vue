@@ -9,14 +9,7 @@
       <!-- Блок Оборудование -->
       <div class="module-card" @click="goToModule('/equipment')">
         <div class="module-icon equipment-icon">
-          <svg
-            width="48"
-            height="48"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          >
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <rect x="4" y="4" width="16" height="16" rx="2" />
             <line x1="9" y1="4" x2="9" y2="20" />
             <line x1="15" y1="4" x2="15" y2="20" />
@@ -44,20 +37,11 @@
         </div>
       </div>
 
-      <!-- Блок СИ (Средства измерения) -->
+      <!-- Блок СИ -->
       <div class="module-card" @click="goToModule('/si')">
         <div class="module-icon si-icon">
-          <svg
-            width="48"
-            height="48"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          >
-            <path
-              d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"
-            />
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
             <circle cx="12" cy="12" r="3" />
           </svg>
         </div>
@@ -84,14 +68,7 @@
       <!-- Блок Ресурсы -->
       <div class="module-card" @click="goToModule('/resources')">
         <div class="module-icon resources-icon">
-          <svg
-            width="48"
-            height="48"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          >
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M12 2v4M12 22v-4M4 12H2M6 12H4M20 12h-2M22 12h-2" />
             <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
             <path d="M16.5 7.5L19 5M7.5 16.5L5 19M16.5 16.5L19 19M7.5 7.5L5 5" />
@@ -120,14 +97,7 @@
       <!-- Блок Обслуживание -->
       <div class="module-card" @click="goToModule('/maintenance')">
         <div class="module-icon maintenance-icon">
-          <svg
-            width="48"
-            height="48"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          >
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <polyline points="14 2 14 8 20 8" />
             <line x1="16" y1="13" x2="8" y2="13" />
@@ -169,7 +139,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useEquipmentStore } from '@/modules/equipment/stores/equipmentStore'
 import { useSIStore } from '@/modules/si/stores/siStore'
@@ -182,55 +152,60 @@ const siStore = useSIStore()
 const resourcesStore = useResourcesStore()
 const maintenanceStore = useMaintenanceStore()
 
-// Статистика для каждого модуля
 const stats = ref({
-  equipment: {
-    total: 0,
-    aggregates: 0,
-    blocks: 0,
-  },
-  si: {
-    total: 0,
-    expiringSoon: 0, // менее 30 дней
-    expired: 0, // просрочено
-  },
-  resources: {
-    total: 0,
-    critical: 0, // менее 1 года
-    warning: 0, // менее 2 лет
-  },
-  maintenance: {
-    plansCount: 0,
-    overdueTasks: 0,
-    nearTasks: 0,
-  },
+  equipment: { total: 0, aggregates: 0, blocks: 0 },
+  si: { total: 0, expiringSoon: 0, expired: 0 },
+  resources: { total: 0, critical: 0, warning: 0 },
+  maintenance: { plansCount: 0, overdueTasks: 0, nearTasks: 0 },
 })
 
-// Срочные уведомления
 const urgentAlerts = ref<{ id: number; type: string; message: string }[]>([])
 
-// Функция для перехода к модулю
 function goToModule(path: string) {
   router.push(path)
 }
 
-// Загрузка статистики
+function getResourceStatus(res: any): 'critical' | 'warning' | 'normal' {
+  if (res.isDeleted) return 'normal'
+  if (res.timeToService !== undefined && res.timeToService < 0) return 'critical'
+  if (res.timeToService !== undefined && res.timeToService < 1) return 'warning'
+  if (res.remainingResource) {
+    const remaining = parseFloat(res.remainingResource)
+    if (!isNaN(remaining)) {
+      if (remaining <= 0) return 'critical'
+      if (remaining < 20) return 'warning'
+    }
+  }
+  if (res.remainingResource && typeof res.remainingResource === 'string') {
+    const num = parseFloat(res.remainingResource)
+    if (!isNaN(num) && num < 10) return 'critical'
+    if (!isNaN(num) && num < 30) return 'warning'
+  }
+  if (res.serviceLife && res.registrationDate) {
+    const yearsPassed = new Date().getFullYear() - new Date(res.registrationDate).getFullYear()
+    const remaining = res.serviceLife - yearsPassed
+    if (remaining < 0) return 'critical'
+    if (remaining < 1) return 'warning'
+  }
+  return 'normal'
+}
+
+function getDaysUntil(dateStr: string): number {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const target = new Date(dateStr)
+  target.setHours(0, 0, 0, 0)
+  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 3600 * 24))
+}
+
 async function loadStats() {
-  // Статистика оборудования
   const equipmentNodes = equipmentStore.flatList || equipmentStore.nodes || []
   stats.value.equipment.total = equipmentNodes.filter((n: any) => !n.isDeleted).length
-  stats.value.equipment.aggregates = equipmentNodes.filter(
-    (n: any) => n.type === 'aggregate' && !n.isDeleted,
-  ).length
-  stats.value.equipment.blocks = equipmentNodes.filter(
-    (n: any) => n.type === 'block' && !n.isDeleted,
-  ).length
+  stats.value.equipment.aggregates = equipmentNodes.filter((n: any) => n.type === 'aggregate' && !n.isDeleted).length
+  stats.value.equipment.blocks = equipmentNodes.filter((n: any) => n.type === 'block' && !n.isDeleted).length
 
-  // Статистика СИ
   const siList = siStore.allInstruments || []
   stats.value.si.total = siList.filter((s: any) => !s.isDeleted).length
-
-  // Подсчёт приближающихся и просроченных поверок
   let expiringSoon = 0
   let expired = 0
   for (const si of siList) {
@@ -245,27 +220,22 @@ async function loadStats() {
   stats.value.si.expiringSoon = expiringSoon
   stats.value.si.expired = expired
 
-  // Статистика ресурсов
   const resources = resourcesStore.resources || []
   stats.value.resources.total = resources.length
-  let critical = 0
-  let warning = 0
+  let criticalCount = 0
+  let warningCount = 0
   for (const res of resources) {
-    const remaining = getRemainingLife(res)
-    if (remaining < 1) critical++
-    else if (remaining < 2) warning++
+    const status = getResourceStatus(res)
+    if (status === 'critical') criticalCount++
+    else if (status === 'warning') warningCount++
   }
-  stats.value.resources.critical = critical
-  stats.value.resources.warning = warning
+  stats.value.resources.critical = criticalCount
+  stats.value.resources.warning = warningCount
 
-  // Статистика обслуживания
   const plans = maintenanceStore.allPlans || []
   stats.value.maintenance.plansCount = plans.length
 
-  // Сбор срочных уведомлений
   urgentAlerts.value = []
-
-  // Просроченные поверки СИ
   for (const si of siList) {
     if (si.isDeleted) continue
     const nextDate = siStore.getNextVerificationDate(si.id)
@@ -277,33 +247,15 @@ async function loadStats() {
       })
     }
   }
-
-  // Критические ресурсы
   for (const res of resources) {
-    const remaining = getRemainingLife(res)
-    if (remaining < 1) {
+    if (getResourceStatus(res) === 'critical') {
       urgentAlerts.value.push({
         id: res.id,
-        type: 'warning',
-        message: `Ресурс "${res.name}" для узла "${res.nodeName}": остаточный ресурс менее года!`,
+        type: 'danger',
+        message: `Ресурс "${res.name}" (${res.mark || ''}) в критическом состоянии!`,
       })
     }
   }
-}
-
-// Вспомогательные функции
-function getDaysUntil(dateStr: string): number {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const target = new Date(dateStr)
-  target.setHours(0, 0, 0, 0)
-  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 3600 * 24))
-}
-
-function getRemainingLife(res: any): number {
-  // Здесь должна быть логика определения остаточного ресурса
-  // Временная заглушка
-  return 1.5
 }
 
 onMounted(() => {
@@ -312,29 +264,26 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Все стили остаются как в вашем оригинале */
 .dashboard {
   max-width: 1400px;
   margin: 0 auto;
 }
-
 .dashboard-title {
   font-size: 24px;
   color: #2c3e50;
   margin-bottom: 8px;
 }
-
 .dashboard-subtitle {
   color: #6c757d;
   margin-bottom: 32px;
 }
-
 .modules-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 24px;
   margin-bottom: 40px;
 }
-
 .module-card {
   background: white;
   border-radius: 12px;
@@ -342,15 +291,13 @@ onMounted(() => {
   cursor: pointer;
   transition: all 0.2s ease;
   border: 1px solid #e0e4e8;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
 }
-
 .module-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
   border-color: #2c5f8a;
 }
-
 .module-icon {
   width: 60px;
   height: 60px;
@@ -360,40 +307,33 @@ onMounted(() => {
   justify-content: center;
   margin-bottom: 16px;
 }
-
 .equipment-icon {
   background-color: #e3f2fd;
   color: #1565c0;
 }
-
 .si-icon {
   background-color: #e8f5e9;
   color: #2e7d32;
 }
-
 .resources-icon {
   background-color: #fff3e0;
   color: #e65100;
 }
-
 .maintenance-icon {
   background-color: #fce4ec;
   color: #c62828;
 }
-
 .module-card h3 {
   font-size: 18px;
   margin-bottom: 16px;
   color: #2c3e50;
 }
-
 .module-stats {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 16px;
 }
-
 .stat-item {
   flex: 1;
   text-align: center;
@@ -401,83 +341,69 @@ onMounted(() => {
   background: #f8f9fa;
   border-radius: 8px;
 }
-
 .stat-value {
   display: block;
   font-size: 20px;
   font-weight: bold;
   color: #2c5f8a;
 }
-
 .stat-label {
   display: block;
   font-size: 11px;
   color: #6c757d;
   margin-top: 4px;
 }
-
 .module-footer {
   text-align: right;
   border-top: 1px solid #e0e4e8;
   padding-top: 12px;
 }
-
 .module-link {
   font-size: 13px;
   color: #2c5f8a;
   font-weight: 500;
 }
-
 .module-card:hover .module-link {
   text-decoration: underline;
 }
-
 .alerts-section {
   background: white;
   border-radius: 12px;
   padding: 20px;
   border: 1px solid #e0e4e8;
 }
-
 .alerts-section h3 {
   font-size: 18px;
   margin-bottom: 16px;
   color: #c0392b;
 }
-
 .alerts-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-
 .alert-item {
   padding: 12px;
   border-radius: 8px;
   font-size: 14px;
 }
-
 .alert-item.danger {
   background-color: #ffe0e0;
   border-left: 4px solid #c0392b;
   color: #c0392b;
 }
-
 .alert-item.warning {
   background-color: #fff3e0;
   border-left: 4px solid #e67e22;
   color: #e67e22;
 }
-
 @media (max-width: 768px) {
   .modules-grid {
     grid-template-columns: 1fr;
   }
-
   .module-stats {
     flex-wrap: wrap;
   }
-
   .stat-item {
     min-width: 80px;
   }
