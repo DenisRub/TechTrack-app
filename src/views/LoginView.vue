@@ -30,20 +30,30 @@ const login = ref('')
 const password = ref('')
 const error = ref('')
 
+// Мок-данные пользователей
+const users = [
+  { id: 1, login: 'operator', password: '123', role: 'operator', name: 'Иванов Иван' },
+  { id: 2, login: 'admin', password: '123', role: 'admin', name: 'Петров Петр' },
+]
+
 const handleLogin = () => {
   if (!login.value || !password.value) {
     error.value = 'Заполните все поля'
     return
   }
-  // Простейшая имитация авторизации (в реальности – запрос к бекенду)
-  if (login.value === 'admin' && password.value === '123') {
-    localStorage.setItem('user', JSON.stringify({ login: 'admin', role: 'admin' }))
-    router.push('/')
-  } else if (login.value === 'operator' && password.value === '123') {
-    localStorage.setItem('user', JSON.stringify({ login: 'operator', role: 'operator' }))
-    router.push('/')
-  } else if (login.value === 'observer' && password.value === '123') {
-    localStorage.setItem('user', JSON.stringify({ login: 'observer', role: 'observer' }))
+
+  const user = users.find((u) => u.login === login.value && u.password === password.value)
+
+  if (user) {
+    localStorage.setItem(
+      'user',
+      JSON.stringify({
+        id: user.id,
+        login: user.login,
+        role: user.role,
+        name: user.name,
+      }),
+    )
     router.push('/')
   } else {
     error.value = 'Неверный логин или пароль'

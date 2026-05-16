@@ -113,24 +113,32 @@
                 {{ task.nodeName }}
               </button>
             </td>
-            <td>{{ task.parentName || '-' }}</td>
+            <td>{{ getParentName(task.nodeId) || '-' }}</td>
             <td>
-              {{ formatDate(task.expiryDate) }}
-              <span
-                v-if="task.status !== 'completed'"
-                class="warning-badge"
-                :class="getDateBadgeClass(task)"
-                >{{ getDateBadgeText(task) }}</span
-              >
+              <template v-if="task.expiryDate">
+                {{ formatDate(task.expiryDate) }}
+                <span
+                  v-if="task.status !== 'completed'"
+                  class="warning-badge"
+                  :class="getDateBadgeClass(task)"
+                  >{{ getDateBadgeText(task) }}</span
+                >
+              </template>
+              <template v-else>-</template>
               <span v-if="task.status === 'completed'" class="success-badge">✅ Выполнено</span>
             </td>
             <td>
-              {{ formatDate(task.recommendedDate) }}
-              <span
-                v-if="task.status !== 'completed' && isDateNear(task.recommendedDate, task.status)"
-                class="warning-badge"
-                >Скоро!</span
-              >
+              <template v-if="task.recommendedDate">
+                {{ formatDate(task.recommendedDate) }}
+                <span
+                  v-if="
+                    task.status !== 'completed' && isDateNear(task.recommendedDate, task.status)
+                  "
+                  class="warning-badge"
+                  >Скоро!</span
+                >
+              </template>
+              <template v-else>-</template>
             </td>
             <td>{{ task.serviceType }}</td>
             <td>{{ getStatusText(task.status) }}</td>
@@ -280,13 +288,15 @@ function formatYMD(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
+// Исправленная функция получения родительского узла (местоположения)
 function getParentName(nodeId: number): string {
-  const node = equipmentStore.nodes.find((n: any) => n.id === nodeId)
+  if (!nodeId) return '-'
+  const node = equipmentStore.allNodes?.find((n: any) => n.id === nodeId)
   if (node && node.parentId) {
-    const parent = equipmentStore.nodes.find((n: any) => n.id === node.parentId)
-    return parent ? parent.name : '-'
+    const parent = equipmentStore.allNodes?.find((n: any) => n.id === node.parentId)
+    return parent ? parent.name : node.location || '-'
   }
-  return '-'
+  return node?.location || '-'
 }
 
 function getExpiryDateFromStore(nodeId: number): string | null {
@@ -307,19 +317,20 @@ function loadData() {
 
   console.log('Loading plan with id:', id)
 
-  // Получаем план из store (используем plans, а не allPlans)
+  // Получаем план из store
   plan.value = maintenanceStore.plans.find((p: any) => p.id === id)
   console.log('Found plan:', plan.value)
 
   if (plan.value) {
     tasks.value = maintenanceStore.getTasksForPlan(id)
-    console.log('Tasks:', tasks.value)
+    console.log('Tasks count:', tasks.value.length)
   }
 }
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return ''
   const parts = dateStr.split('-')
+  if (parts.length !== 3) return dateStr
   return `${parts[2]}.${parts[1]}.${parts[0]}`
 }
 
@@ -360,6 +371,7 @@ function isExpiryOverdue(dateStr: string, status: string): boolean {
 
 function getDateBadgeClass(task: any): string {
   if (task.status === 'completed') return ''
+  if (!task.expiryDate) return ''
   if (isExpiryOverdue(task.expiryDate, task.status)) return 'danger-badge'
   if (isExpiryNear(task.expiryDate, task.status)) return 'warning-badge'
   return ''
@@ -367,6 +379,7 @@ function getDateBadgeClass(task: any): string {
 
 function getDateBadgeText(task: any): string {
   if (task.status === 'completed') return ''
+  if (!task.expiryDate) return ''
   if (isExpiryOverdue(task.expiryDate, task.status)) return 'Просрочено!'
   if (isExpiryNear(task.expiryDate, task.status)) return 'Скоро!'
   return ''
@@ -374,8 +387,9 @@ function getDateBadgeText(task: any): string {
 
 function getRowClass(task: any): string {
   if (task.status === 'completed') return ''
-  if (task.expiryDate && isExpiryOverdue(task.expiryDate, task.status)) return 'overdue-row'
-  if (task.expiryDate && isExpiryNear(task.expiryDate, task.status)) return 'warning-row'
+  if (!task.expiryDate) return ''
+  if (isExpiryOverdue(task.expiryDate, task.status)) return 'overdue-row'
+  if (isExpiryNear(task.expiryDate, task.status)) return 'warning-row'
   return ''
 }
 
@@ -481,12 +495,11 @@ const filteredAndSortedTasks = computed(() => {
     list = list.filter((t) => {
       return (
         (t.nodeName && t.nodeName.toLowerCase().includes(query)) ||
-        (t.parentName && t.parentName.toLowerCase().includes(query)) ||
+        (getParentName(t.nodeId) && getParentName(t.nodeId).toLowerCase().includes(query)) ||
         (t.serviceType && t.serviceType.toLowerCase().includes(query)) ||
         (t.status && getStatusText(t.status).toLowerCase().includes(query)) ||
         (t.expiryDate && formatDate(t.expiryDate).toLowerCase().includes(query)) ||
         (t.recommendedDate && formatDate(t.recommendedDate).toLowerCase().includes(query)) ||
-        (t.nodeLocation && t.nodeLocation.toLowerCase().includes(query)) ||
         (t.notes && t.notes.toLowerCase().includes(query))
       )
     })
@@ -503,6 +516,8 @@ const filteredAndSortedTasks = computed(() => {
   list.sort((a, b) => {
     let valA = a[sortField.value]
     let valB = b[sortField.value]
+    if (valA === undefined || valA === null) valA = ''
+    if (valB === undefined || valB === null) valB = ''
     if (valA < valB) return sortOrder.value === 'asc' ? -1 : 1
     if (valA > valB) return sortOrder.value === 'asc' ? 1 : -1
     return 0
@@ -546,9 +561,9 @@ function getTasksExportData() {
   return filteredAndSortedTasks.value.map((t, idx) => ({
     '№ п/п': idx + 1,
     'Наименование оборудования': t.nodeName,
-    Местоположение: t.parentName || '-',
-    'Дата истечения срока ТО': formatDate(t.expiryDate),
-    'Дата проведения ТО': formatDate(t.recommendedDate),
+    Местоположение: getParentName(t.nodeId) || '-',
+    'Дата истечения срока ТО': t.expiryDate ? formatDate(t.expiryDate) : '',
+    'Дата проведения ТО': t.recommendedDate ? formatDate(t.recommendedDate) : '',
     'Тип обслуживания': t.serviceType,
     Статус: getStatusText(t.status),
     Примечание: t.notes || '-',

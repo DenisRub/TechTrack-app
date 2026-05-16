@@ -3,6 +3,7 @@ import LoginView from '@/views/LoginView.vue'
 import MainLayout from '@/layouts/MainLayout.vue'
 import PlaceholderView from '@/views/PlaceholderView.vue'
 import HomeView from '@/views/HomeView.vue'
+import UsersView from '@/modules/users/views/UsersView.vue'
 
 // Модуль СИ
 import SIView from '@/modules/si/views/SIView.vue'
@@ -34,6 +35,9 @@ const routes = [
     component: MainLayout,
     meta: { requiresAuth: true },
     children: [
+      //Модуль Пользователи
+      { path: 'users', component: UsersView },
+
       // главная страница после авторизации
       { path: '', component: HomeView },
 
