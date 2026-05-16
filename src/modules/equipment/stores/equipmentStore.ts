@@ -1,7 +1,30 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import type { EquipmentNode, Resource, NodeType } from '../types/equipmentTypes';
+interface MoveHistoryItem {
+  id: number;
+  nodeId: number;
+  fromLocation: string;
+  toLocation: string;
+  date: string;
+  userId: string;
+}
 
+interface CompositionHistoryItem {
+  id: number;
+  parentId: number;
+  childId: number;
+  action: 'add' | 'remove';
+  date: string;
+  userId?: string;
+}
+
+interface AuditLogItem {
+  timestamp: string;
+  user: string;
+  action: string;
+  details: string;
+}
 // Ключи для localStorage
 const STORAGE_KEY_NODES = 'equipment_nodes';
 const STORAGE_KEY_RESOURCES = 'equipment_resources';
@@ -34,8 +57,8 @@ function getCurrentDate(): string {
   return `${year}-${month}-${day}`;
 }
 
-<<<<<<< HEAD
-// Мок-данные – узлы (точное соответствие таблице Оборудование)
+// ========== МОК-ДАННЫЕ (точно из таблицы_v3.xlsx) ==========
+
 const mockNodes: EquipmentNode[] = [
   // Пост контроля РО 147 (агрегат)
   {
@@ -112,7 +135,7 @@ const mockNodes: EquipmentNode[] = [
     isSI: false,
     condition: 'в работе',
     resource: '',
-    location: ' ',
+    location: 'п.г.т. Мулловка',
     note: '',
     parameters: '3G, 2xLAN',
     createdAt: '2024-01-01',
@@ -132,7 +155,7 @@ const mockNodes: EquipmentNode[] = [
     isSI: false,
     condition: 'в работе',
     resource: '',
-    location: ' ',
+    location: 'п.г.т. Мулловка',
     note: '',
     parameters: '',
     createdAt: '2024-01-01',
@@ -152,7 +175,7 @@ const mockNodes: EquipmentNode[] = [
     isSI: false,
     condition: 'в работе',
     resource: '',
-    location: ' ',
+    location: 'п.г.т. Мулловка',
     note: '',
     parameters: 'без регулировки',
     createdAt: '2024-01-01',
@@ -260,160 +283,36 @@ const mockNodes: EquipmentNode[] = [
     createdAt: '2024-01-01',
     updatedAt: '2024-01-01',
     isDeleted: false,
-=======
-// ========== МОК-ДАННЫЕ (используются только при первом запуске) ==========
-const mockNodes: EquipmentNode[] = [
-  {
-    id: 1,
-    name: 'Пост контроля АСКРО СЗЗ №9',
-    type: 'aggregate',
-    nodeTypeId: null,
-    parentId: null,
-    location: 'ПП №1',
-    characteristics: {},
-    createdAt: '2024-01-01',
-    updatedAt: '2024-01-01',
-    isDeleted: false,
-    manufacturer: 'НПП «Доза»',
-    model: 'АСКРО-СЗЗ',
-    serialNumber: '001',
-    inventoryNumber: 'ИНВ-001',
-    condition: 'в работе',
-    resource: '100%',
-    note: '',
-    subsystem: 'АСКРО ПП№1',
-    isSI: false,
-  },
-  {
-    id: 2,
-    name: 'Блок детектирования БДГ-01 №373',
-    type: 'block',
-    nodeTypeId: 1,
-    parentId: 1,
-    location: 'ПП №1',
-    characteristics: {},
-    createdAt: '2024-01-01',
-    updatedAt: '2024-01-01',
-    isDeleted: false,
-    manufacturer: 'НПП «Доза»',
-    model: 'БДГ-01',
-    serialNumber: '373',
-    inventoryNumber: 'ИНВ-002',
-    condition: 'в работе',
-    resource: '95%',
-    note: '',
-    subsystem: 'АСКРО ПП№1',
-    isSI: true,
-  },
-  {
-    id: 3,
-    name: 'Мобильный маршрутизатор iRZ RUH2b',
-    type: 'block',
-    nodeTypeId: 2,
-    parentId: 1,
-    location: 'ПП №1',
-    characteristics: {},
-    createdAt: '2024-01-01',
-    updatedAt: '2024-01-01',
-    isDeleted: false,
-    manufacturer: 'iRZ',
-    model: 'RUH2b',
-    serialNumber: 'SN123456',
-    inventoryNumber: 'ИНВ-003',
-    condition: 'в работе',
-    resource: '100%',
-    note: '',
-    subsystem: 'АСКРО ПП№1',
-    isSI: false,
->>>>>>> 7f08f3931ee2e07c1174150a164d1a26ce9256b9
   },
 ];
 
 const mockResources: Resource[] = [
-<<<<<<< HEAD
-  {
-    id: 1,
-    nodeId: 3,   // Аккумуляторная батарея CSB
-    name: 'Исходный ресурс',
-    value: '200',
-    unit: 'Вт·ч',
-    updatedAt: '2024-01-01',
-  },
-  {
-    id: 2,
-    nodeId: 3,
-    name: 'Остаточный ресурс',
-    value: '150',
-    unit: 'Вт·ч',
-    updatedAt: '2024-01-01',
-  },
-  {
-    id: 3,
-    nodeId: 9,   // Аккумуляторная батарея Activ
-    name: 'Исходный ресурс',
-    value: '215',
-    unit: 'Вт·ч',
-    updatedAt: '2024-01-01',
-  },
-  {
-    id: 4,
-    nodeId: 9,
-    name: 'Остаточный ресурс',
-    value: '172',
-    unit: 'Вт·ч',
-    updatedAt: '2024-01-01',
-  },
-  {
-    id: 5,
-    nodeId: 1,   // Пост контроля РО 147
-    name: 'Остаточный ресурс',
-    value: '1',
-    unit: 'лет',
-    updatedAt: '2024-01-01',
-  },
+  { id: 1, nodeId: 3, name: 'Исходный ресурс', value: '200', unit: 'Вт·ч', updatedAt: '2024-01-01' },
+  { id: 2, nodeId: 3, name: 'Остаточный ресурс', value: '150', unit: 'Вт·ч', updatedAt: '2024-01-01' },
+  { id: 3, nodeId: 9, name: 'Исходный ресурс', value: '215', unit: 'Вт·ч', updatedAt: '2024-01-01' },
+  { id: 4, nodeId: 9, name: 'Остаточный ресурс', value: '172', unit: 'Вт·ч', updatedAt: '2024-01-01' },
+  { id: 5, nodeId: 1, name: 'Остаточный ресурс', value: '1', unit: 'лет', updatedAt: '2024-01-01' },
 ];
 
 const mockNodeTypes: NodeType[] = [
-  { id: 1, name: 'Блок детектирования', characteristicsTemplate: { тип: { value: '', unit: '', isMain: true }, чувствительность: { value: '', unit: 'мкЗв/с', isMain: true }, диапазон: { value: '', unit: 'мкЗв/ч', isMain: false } }, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
-  { id: 2, name: 'Маршрутизатор', characteristicsTemplate: { модель: { value: '', unit: '', isMain: true }, порты: { value: '', unit: 'шт', isMain: true }, пропускная_способность: { value: '', unit: 'Мбит/с', isMain: false } }, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
-  { id: 3, name: 'Блок питания', characteristicsTemplate: { напряжение: { value: '', unit: 'В', isMain: true }, ток: { value: '', unit: 'А', isMain: true }, мощность: { value: '', unit: 'Вт', isMain: true } }, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
-  // ... остальные виды, если нужны
-=======
-  { id: 1, nodeId: 1, name: 'Остаточная ёмкость', value: 85, unit: '%', updatedAt: '2024-01-01' },
-  { id: 2, nodeId: 2, name: 'Чувствительность', value: 95, unit: '%', updatedAt: '2024-01-01' },
-];
-
-const mockNodeTypes: NodeType[] = [
-  { id: 1, name: 'Блок детектирования', characteristicsTemplate: { тип: 'гамма', чувствительность: '' }, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
-  { id: 2, name: 'Маршрутизатор', characteristicsTemplate: { модель: '', порты: '' }, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
->>>>>>> 7f08f3931ee2e07c1174150a164d1a26ce9256b9
+  { id: 1, name: 'Блок детектирования', characteristicsTemplate: {}, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
+  { id: 2, name: 'Маршрутизатор', characteristicsTemplate: {}, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
+  { id: 3, name: 'Блок питания', characteristicsTemplate: {}, createdAt: '2024-01-01', updatedAt: '2024-01-01' },
 ];
 
 export const useEquipmentStore = defineStore('equipment', () => {
-  // Инициализация
+  // ========== ИНИЦИАЛИЗАЦИЯ ==========
   const nodes = ref<EquipmentNode[]>(loadFromStorage(STORAGE_KEY_NODES, mockNodes));
   const resources = ref<Resource[]>(loadFromStorage(STORAGE_KEY_RESOURCES, mockResources));
-  // Исправленная инициализация nodeTypes
-  const storedNodeTypes = loadFromStorage(STORAGE_KEY_NODE_TYPES, []);
-  const nodeTypes = ref<NodeType[]>(storedNodeTypes.length ? storedNodeTypes : [...mockNodeTypes]);
+  const nodeTypes = ref<NodeType[]>(loadFromStorage(STORAGE_KEY_NODE_TYPES, mockNodeTypes));
 
-
-  const moveHistory = ref<{ id: number; nodeId: number; fromLocation: string; toLocation: string; date: string; userId: string }[]>(
-    loadFromStorage(STORAGE_KEY_MOVE_HISTORY, [])
-  );
-  const compositionHistory = ref<{ id: number; parentId: number; childId: number; action: 'add' | 'remove'; date: string; userId?: string }[]>(
-    loadFromStorage(STORAGE_KEY_COMPOSITION_HISTORY, [])
-  );
-  const auditLog = ref<{ timestamp: string; user: string; action: string; details: string }[]>(
-    loadFromStorage(STORAGE_KEY_AUDIT_LOG, [])
-  );
-
-  // ========== ВСПОМОГАТЕЛЬНЫЕ ВЫЧИСЛЯЕМЫЕ СВОЙСТВА ==========
+ const moveHistory = ref<MoveHistoryItem[]>(loadFromStorage(STORAGE_KEY_MOVE_HISTORY, []));
+const compositionHistory = ref<CompositionHistoryItem[]>(loadFromStorage(STORAGE_KEY_COMPOSITION_HISTORY, []));
+const auditLog = ref<AuditLogItem[]>(loadFromStorage(STORAGE_KEY_AUDIT_LOG, []));
   const allNodes = computed(() => nodes.value);
   const activeNodes = computed(() => nodes.value.filter(n => !n.isDeleted));
-  const flatList = computed(() => activeNodes.value);
-
   const filterParams = ref({ search: '', type: '' });
+
   const filteredNodes = computed(() => {
     let list = activeNodes.value;
     const { search, type } = filterParams.value;
@@ -436,24 +335,19 @@ export const useEquipmentStore = defineStore('equipment', () => {
     return build(null);
   });
 
-  // ========== ЖУРНАЛИРОВАНИЕ ==========
+  // ========== АУДИТ ==========
   function logAction(action: string, details: string) {
     let user = 'anonymous';
     const userStr = localStorage.getItem('user');
     if (userStr) {
-      try { user = JSON.parse(userStr).login || 'anonymous'; } catch { /* ignore */ }
+      try { user = JSON.parse(userStr).login || 'anonymous'; } catch {}
     }
-    auditLog.value.push({
-      timestamp: new Date().toISOString(),
-      user,
-      action,
-      details,
-    });
+    auditLog.value.push({ timestamp: new Date().toISOString(), user, action, details });
     saveToStorage(STORAGE_KEY_AUDIT_LOG, auditLog.value);
     console.log(`[AUDIT] ${action}: ${details} (${user})`);
   }
 
-  // ========== УЗЛЫ (CRUD) С СОХРАНЕНИЕМ ==========
+  // ========== УЗЛЫ (CRUD) ==========
   function getNode(id: number): EquipmentNode | undefined {
     return nodes.value.find(n => n.id === id);
   }
@@ -509,6 +403,7 @@ export const useEquipmentStore = defineStore('equipment', () => {
       id: newId,
       nodeId,
       fromLocation: fromLocation || '',
+
       toLocation: toLocation || '',
       date: getCurrentDate(),
       userId: user,
@@ -521,16 +416,15 @@ export const useEquipmentStore = defineStore('equipment', () => {
     return moveHistory.value.filter(h => h.nodeId === nodeId).sort((a, b) => b.id - a.id);
   }
 
-  // ========== КОМПЛЕКТАЦИЯ И ЕЁ ИСТОРИЯ ==========
+  // ========== КОМПЛЕКТАЦИЯ ==========
   function addCompositionRecord(parentId: number, childId: number, action: 'add' | 'remove') {
     let user = 'anonymous';
     const userStr = localStorage.getItem('user');
     if (userStr) {
       try { user = JSON.parse(userStr).login || 'anonymous'; } catch {}
     }
-    const newId = compositionHistory.value.length + 1;
     compositionHistory.value.push({
-      id: newId,
+      id: compositionHistory.value.length + 1,
       parentId,
       childId,
       action,
@@ -538,7 +432,7 @@ export const useEquipmentStore = defineStore('equipment', () => {
       userId: user,
     });
     saveToStorage(STORAGE_KEY_COMPOSITION_HISTORY, compositionHistory.value);
-    logAction('Изменение комплектации', `${action === 'add' ? 'Добавление' : 'Удаление'} узла ${childId} ${action === 'add' ? 'в' : 'из'} агрегата ${parentId}`);
+    logAction('Изменение комплектации', `${action === 'add' ? 'Добавление' : 'Удаление'} узла ${childId}`);
   }
 
   function getCompositionHistoryForNode(nodeId: number) {
@@ -557,21 +451,13 @@ export const useEquipmentStore = defineStore('equipment', () => {
   }
 
   function addChild(parentId: number, childId: number): boolean {
-    if (parentId === childId) {
-      console.warn('Нельзя добавить узел в самого себя');
-      return false;
-    }
-    if (isDescendant(childId, parentId)) {
-      console.warn('Нельзя добавить узел, так как это создаст цикл');
-      return false;
-    }
+    if (parentId === childId) return false;
+    if (isDescendant(childId, parentId)) return false;
     const child = nodes.value.find(n => n.id === childId);
     if (child && child.parentId !== parentId) {
-      const oldParent = child.parentId;
       child.parentId = parentId;
       saveToStorage(STORAGE_KEY_NODES, nodes.value);
       addCompositionRecord(parentId, childId, 'add');
-      logAction('Добавление в состав', `Узел "${child.name}" (ID ${childId}) добавлен в агрегат ID ${parentId} (был в ${oldParent ?? 'корне'})`);
       return true;
     }
     return false;
@@ -583,7 +469,6 @@ export const useEquipmentStore = defineStore('equipment', () => {
       child.parentId = null;
       saveToStorage(STORAGE_KEY_NODES, nodes.value);
       addCompositionRecord(parentId, childId, 'remove');
-      logAction('Удаление из состава', `Узел "${child.name}" (ID ${childId}) удалён из агрегата ID ${parentId}`);
     }
   }
 
@@ -606,14 +491,14 @@ export const useEquipmentStore = defineStore('equipment', () => {
     if (!old) return;
     resources.value[idx] = {
       id: old.id,
-      nodeId: data.nodeId !== undefined ? data.nodeId : old.nodeId,
-      name: data.name !== undefined ? data.name : old.name,
-      value: data.value !== undefined ? data.value : old.value,
+      nodeId: data.nodeId ?? old.nodeId,
+      name: data.name ?? old.name,
+      value: data.value ?? old.value,
       unit: data.unit !== undefined ? data.unit : old.unit,
       updatedAt: getCurrentDate(),
     };
     saveToStorage(STORAGE_KEY_RESOURCES, resources.value);
-    logAction('Редактирование ресурса', `Ресурс ID ${id} для узла ID ${old.nodeId}`);
+    logAction('Редактирование ресурса', `Ресурс ID ${id}`);
   }
 
   function deleteResource(id: number) {
@@ -643,10 +528,8 @@ export const useEquipmentStore = defineStore('equipment', () => {
     const existing = nodeTypes.value[idx];
     if (!existing) return;
     nodeTypes.value[idx] = {
-      id: existing.id,
-      name: data.name ?? existing.name,
-      characteristicsTemplate: data.characteristicsTemplate ?? existing.characteristicsTemplate,
-      createdAt: existing.createdAt,
+      ...existing,
+      ...data,
       updatedAt: getCurrentDate(),
     };
     saveToStorage(STORAGE_KEY_NODE_TYPES, nodeTypes.value);
@@ -665,42 +548,28 @@ export const useEquipmentStore = defineStore('equipment', () => {
 
   // ========== ЭКСПОРТ ==========
   return {
-    // Данные
     nodes: filteredNodes,
     allNodes,
-    activeNodes,
-    flatList,
     tree,
-    resources,
-    auditLog,
-    moveHistory,
-    compositionHistory,
-    nodeTypes,
-    // Методы узлов
     getNode,
     addNode,
     updateNode,
     deleteNode,
     addChild,
     removeChild,
-    // Перемещения
     addMoveRecord,
     getMoveHistoryForNode,
-    // Комплектация
+    addCompositionRecord,
     getCompositionHistoryForNode,
-    // Ресурсы
     getResourcesForNode,
     addResource,
     updateResource,
     deleteResource,
-    // Виды узлов
     getNodeTypes,
     addNodeType,
     updateNodeType,
     deleteNodeType,
-    // Фильтрация
     setFilterParams,
-    // Журнал
-    logAction,
+    nodeTypes, // экспортируем сам ref
   };
 });
