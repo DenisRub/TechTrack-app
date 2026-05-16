@@ -1,14 +1,14 @@
 <template>
-  <div class="modal-overlay" v-if="visible">
-    <div class="modal-content" style="width: 750px;">
+  <div class="modal-overlay" v-if="visible" @click.self="close">
+    <div class="modal-content" style="width: 800px;">
       <div class="modal-header">{{ isEdit ? 'Редактирование узла' : 'Добавление узла' }}</div>
 
-
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <!-- Левая колонка -->
         <div>
           <div class="form-group">
             <label>Наименование*</label>
-            <input v-model="form.name" class="form-control" />
+            <input v-model="form.name" class="form-control" autofocus />
           </div>
           <div class="form-group">
             <label>Тип</label>
@@ -36,19 +36,36 @@
             <label>Марка</label>
             <input v-model="form.model" class="form-control" />
           </div>
-        </div>
-
-        <div>
           <div class="form-group">
-            <label>Зав. №</label>
+            <label>Заводской номер</label>
             <input v-model="form.serialNumber" class="form-control" />
           </div>
           <div class="form-group">
-            <label>Инв. №</label>
+            <label>Инвентарный номер</label>
             <input v-model="form.inventoryNumber" class="form-control" />
           </div>
           <div class="form-group">
-            <label>СИ</label>
+            <label>Учётный номер</label>
+            <input v-model="form.accountingNumber" class="form-control" />
+          </div>
+        </div>
+
+        <!-- Правая колонка -->
+        <div>
+          <div class="form-group">
+            <label>Дата производства</label>
+            <input type="date" v-model="form.dateManufacture" class="form-control" />
+          </div>
+          <div class="form-group">
+            <label>Дата установки</label>
+            <input type="date" v-model="form.dateInstallation" class="form-control" />
+          </div>
+          <div class="form-group">
+            <label>Режим работы</label>
+            <input v-model="form.operationMode" class="form-control" />
+          </div>
+          <div class="form-group">
+            <label>СИ (средство измерения)</label>
             <select v-model="form.isSI" class="form-control">
               <option :value="false">нет</option>
               <option :value="true">да</option>
@@ -68,28 +85,30 @@
           </div>
           <div class="form-group">
             <label>Примечание</label>
-            <textarea v-model="form.note" class="form-control" rows="2"></textarea>
+            <textarea v-model="form.note" rows="2" class="form-control"></textarea>
           </div>
         </div>
       </div>
 
-      <!-- Характеристики: textarea с валидацией JSON -->
+      <!-- Характеристики JSON -->
       <div class="form-group">
         <label>Характеристики (JSON)</label>
         <textarea
           v-model="charStr"
           rows="6"
           class="form-control"
-          placeholder='{\n  "Напряжение питания": {\n    "value": "220В",\n    "unit": "В",\n    "isMain": true\n  }\n}'
+          placeholder='{\n  "Параметр1": {"value": "значение", "unit": "ед.", "isMain": true},\n  "Параметр2": {"value": "123", "unit": "шт", "isMain": false}\n}'
         ></textarea>
-        <small class="text-muted">Введите валидный JSON. Используйте формат: {"параметр": {"value": "значение", "unit": "ед.", "isMain": true/false}}</small>
+        <small class="text-muted">Введите валидный JSON. Поля isMain=true будут отображаться в блоке "Параметры" карточки.</small>
       </div>
 
       <div v-if="error" class="error-text">{{ error }}</div>
 
       <div class="modal-footer">
         <button class="btn btn-secondary" @click="close">Отмена</button>
-        <button class="btn btn-primary" @click="save">Сохранить</button>
+        <button class="btn btn-primary" :disabled="saving" @click="save">
+          {{ saving ? 'Сохранение...' : 'Сохранить' }}
+        </button>
       </div>
     </div>
   </div>
@@ -100,10 +119,20 @@ import { ref, reactive } from 'vue';
 import { useEquipmentStore } from '../stores/equipmentStore';
 
 const store = useEquipmentStore();
+
+function getCurrentDate(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 const visible = ref(false);
 const isEdit = ref(false);
 const editId = ref<number | null>(null);
 const error = ref('');
+const saving = ref(false);
 
 const form = reactive({
   name: '',
@@ -114,6 +143,10 @@ const form = reactive({
   model: '',
   serialNumber: '',
   inventoryNumber: '',
+  accountingNumber: '',
+  dateManufacture: '',
+  dateInstallation: '',
+  operationMode: '',
   isSI: false,
   condition: '',
   resource: '',
@@ -142,6 +175,10 @@ function resetForm() {
   form.model = '';
   form.serialNumber = '';
   form.inventoryNumber = '';
+  form.accountingNumber = '';
+  form.dateManufacture = '';
+  form.dateInstallation = '';
+  form.operationMode = '';
   form.isSI = false;
   form.condition = '';
   form.resource = '';
@@ -168,6 +205,10 @@ function open(editNode?: any, parentId?: number) {
     form.model = editNode.model || '';
     form.serialNumber = editNode.serialNumber || '';
     form.inventoryNumber = editNode.inventoryNumber || '';
+    form.accountingNumber = editNode.accountingNumber || '';
+    form.dateManufacture = editNode.dateManufacture || '';
+    form.dateInstallation = editNode.dateInstallation || '';
+    form.operationMode = editNode.operationMode || '';
     form.isSI = editNode.isSI ?? false;
     form.condition = editNode.condition || '';
     form.resource = editNode.resource || '';
@@ -184,19 +225,36 @@ function open(editNode?: any, parentId?: number) {
 
 function close() {
   visible.value = false;
+  resetForm();
 }
 
-function save() {
-  if (!form.name) {
+function validate(): boolean {
+  if (!form.name.trim()) {
     error.value = 'Введите наименование';
-    return;
+    return false;
   }
+  try {
+    JSON.parse(charStr.value);
+  } catch {
+    error.value = 'Неверный формат JSON';
+    return false;
+  }
+  return true;
+}
+
+async function save() {
+  if (!validate()) return;
+  saving.value = true;
+  error.value = '';
+
   try {
     form.characteristics = JSON.parse(charStr.value);
   } catch {
-    error.value = 'Неверный формат JSON. Проверьте синтаксис (кавычки, запятые).';
+    error.value = 'Неверный формат JSON';
+    saving.value = false;
     return;
   }
+
   const data = {
     name: form.name,
     type: form.type,
@@ -206,21 +264,27 @@ function save() {
     model: form.model,
     serialNumber: form.serialNumber,
     inventoryNumber: form.inventoryNumber,
+    accountingNumber: form.accountingNumber,
+    dateManufacture: form.dateManufacture,
+    dateInstallation: form.dateInstallation,
+    operationMode: form.operationMode,
     isSI: form.isSI,
     condition: form.condition,
     resource: form.resource,
     location: form.location,
     note: form.note,
-    characteristics: form.characteristics,
     parentId: form.parentId,
+    characteristics: form.characteristics,
   };
+
   if (isEdit.value && editId.value) {
     store.updateNode(editId.value, data);
   } else {
     store.addNode(data);
   }
-  close();
   window.dispatchEvent(new Event('equipment-saved'));
+  close();
+  saving.value = false;
 }
 
 defineExpose({ open });

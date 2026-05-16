@@ -1,5 +1,6 @@
 <template>
   <div class="card" v-if="node">
+    <!-- Заголовок и кнопки управления -->
     <div class="card-header">
       <h2>{{ node.name }}</h2>
       <div class="action-buttons">
@@ -10,8 +11,9 @@
       </div>
     </div>
 
-    <!-- Основные сведения -->
+    <!-- Основные сведения (две колонки) – порядок полей по макету -->
     <div class="info-grid">
+      <!-- Левая колонка -->
       <div class="info-col">
         <div class="info-row"><strong>Марка</strong><span>{{ node.model || '-' }}</span></div>
         <div class="info-row"><strong>Наименование</strong><span>{{ node.name }}</span></div>
@@ -23,9 +25,15 @@
         <div class="info-row"><strong>Учётный номер</strong><span>{{ node.accountingNumber || '-' }}</span></div>
         <div class="info-row"><strong>Режим работы</strong><span>{{ node.operationMode || '-' }}</span></div>
       </div>
+
+      <!-- Правая колонка -->
       <div class="info-col">
         <div class="info-row"><strong>Тип</strong><span>{{ node.type === 'aggregate' ? 'Агрегат' : 'Блок' }}</span></div>
-        <div class="info-row"><strong>Узел</strong><span v-if="node.parentId" class="clickable-link" @click="goToParent">{{ getParentName() }}</span><span v-else>-</span></div>
+        <div class="info-row">
+          <strong>Узел</strong>
+          <span v-if="node.parentId" class="clickable-link" @click="goToParent">{{ getParentName() }}</span>
+          <span v-else>-</span>
+        </div>
         <div class="info-row"><strong>Размещение</strong><span>{{ node.location || '-' }}</span></div>
         <div class="info-row"><strong>Дата производства</strong><span>{{ formatDate(node.dateManufacture) }}</span></div>
         <div class="info-row"><strong>Ресурс</strong><span>{{ node.resource || '-' }}</span></div>
@@ -35,134 +43,143 @@
       </div>
     </div>
 
-    <!-- Параметры -->
+    <!-- Параметры (характеристики с пометкой "Основной") -->
     <div class="section">
       <h3>Параметры</h3>
-      <table class="data-table" v-if="Object.keys(mainParams).length">
-        <thead><tr><th>Параметр</th><th>Значение</th><th>Ед. изм.</th><th>Основной</th></tr></thead>
-        <tbody>
-          <tr v-for="(param, name) in mainParams" :key="name">
-            <td>{{ name }}</td>
-            <td>{{ param.value }}</td>
-            <td>{{ param.unit || '-' }}</td>
-            <td>{{ param.isMain ? '✓' : '' }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-wrapper" v-if="Object.keys(mainParams).length">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Параметр</th>
+              <th>Значение</th>
+              <th>Ед. изм.</th>
+              <th>Основной</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(param, name) in mainParams" :key="name">
+              <td>{{ name }}</td>
+              <td>{{ param.value }}</td>
+              <td>{{ param.unit || '-' }}</td>
+              <td>{{ param.isMain ? '✓' : '' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <div v-else class="empty-message">Параметры не заданы</div>
     </div>
 
-    <!-- Состав (дочерние узлы) -->
-    <div v-if="node.type === 'aggregate'" class="section">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px">
-        <h3>Состав (дочерние узлы)</h3>
-        <button v-if="canEdit" class="btn btn-sm btn-primary" @click="openAddChildModal">+ Добавить в состав</button>
-      </div>
-      <table class="data-table" v-if="children.length">
-        <thead>
-          <tr>
-            <th>Наименование</th>
-            <th>Тип</th>
-            <th>Производитель</th>
-            <th>Марка</th>
-            <th>Основные параметры</th>
-            <th>Примечания</th>
-            <th v-if="canEdit">Действия</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="child in children" :key="child.id">
-            <td><span class="clickable-link" @click="viewChild(child.id)">{{ child.name }}</span></td>
-            <td>{{ child.type === 'aggregate' ? 'Агрегат' : 'Блок' }}</td>
-            <td>{{ child.manufacturer || '-' }}</td>
-            <td>{{ child.model || '-' }}</td>
-            <td>{{ getMainParamsShort(child) }}</td>
-            <td>{{ child.note || '-' }}</td>
-            <td v-if="canEdit">
-              <button class="btn btn-sm btn-danger" @click="removeChild(child.id)">Удалить из состава</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-else class="empty-message">Нет дочерних узлов</div>
-    </div>
-
-  <!-- Ресурсы -->
+    <!-- Установленные узлы и ресурсы -->
 <div class="section">
+  <h3>Установленные узлы и ресурсы</h3>
+
+  <!-- Таблица дочерних узлов (состав) – только для агрегатов -->
+  <div v-if="node.type === 'aggregate'" class="subsection">
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px">
-    <h3>Ресурсы</h3>
-    <div>
-      <button class="btn btn-sm btn-secondary" @click="goToResources">📊 Полный учёт ресурсов</button>
-      <button v-if="canEdit" class="btn btn-sm btn-primary" @click="openAddResourceForm">+ Добавить ресурс</button>
-    </div>
+    <h4>Состав (дочерние узлы)</h4>
+    <button v-if="canEdit" class="btn btn-sm btn-primary" @click="openAddChildModal">+ Добавить в состав</button>
   </div>
-  <div v-if="resources.length">
+  <div v-if="children.length" class="table-wrapper">
     <table class="data-table">
       <thead>
         <tr>
           <th>Наименование</th>
-          <th>Значение</th>
-          <th>Ед. изм.</th>
-          <th>Обновлено</th>
+          <th>Тип</th>
+          <th>Производитель</th>
+          <th>Марка</th>
+          <th>Основные параметры</th>
+          <th>Примечания</th>
           <th v-if="canEdit">Действия</th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="res in resources" :key="res.id">
-          <td>{{ res.name }}</td>
-          <td>{{ res.value }}</td>
-          <td>{{ res.unit || '-' }}</td>
-          <td>{{ formatDate(res.updatedAt) }}</td>
+        <tr v-for="child in children" :key="child.id">
+          <td><span class="clickable-link" @click="viewChild(child.id)">{{ child.name }}</span></td>
+          <td>{{ child.type === 'aggregate' ? 'Агрегат' : 'Блок' }}</td>
+          <td>{{ child.manufacturer || '-' }}</td>
+          <td>{{ child.model || '-' }}</td>
+          <td>{{ getMainParamsShort(child) }}</td>
+          <td>{{ child.note || '-' }}</td>
           <td v-if="canEdit">
-            <button class="btn btn-sm btn-secondary" @click="editResource(res)">✏️</button>
-            <button class="btn btn-sm btn-danger" @click="deleteResource(res.id)">🗑️</button>
+            <button class="btn btn-sm btn-danger" @click="removeChild(child.id)">Удалить из состава</button>
           </td>
         </tr>
       </tbody>
     </table>
   </div>
-  <div v-else class="empty-message">Ресурсы не добавлены</div>
-</div>
-<!-- История перемещений -->
-<div v-if="moveHistory.length" class="section">
-  <h3>История перемещений</h3>
-  <table class="data-table">
-    <thead>
-      <tr><th>Дата</th><th>Откуда</th><th>Куда</th><th>Пользователь</th></tr>
-    </thead>
-    <tbody>
-      <tr v-for="rec in moveHistory" :key="rec.id">
-        <td>{{ rec.date }}</td>
-        <td>{{ rec.fromLocation || '-' }}</td>
-        <td>{{ rec.toLocation }}</td>
-        <td>{{ rec.userId || '-' }}</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+  <div v-else-if="node.type === 'aggregate'" class="empty-message">Нет дочерних узлов</div>
+  </div>
+      <!-- Ресурсы -->
+      <div class="subsection">
+        <h4>Ресурсы</h4>
+        <div class="table-wrapper">
+          <table class="data-table" v-if="resources.length">
+            <thead>
+              <tr>
+                <th>Наименование</th>
+                <th>Значение</th>
+                <th>Ед. изм.</th>
+                <th>Обновлено</th>
+                <th v-if="canEdit">Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="res in resources" :key="res.id">
+                <td>{{ res.name }}</td>
+                <td>{{ res.value }}</td>
+                <td>{{ res.unit || '-' }}</td>
+                <td>{{ formatDate(res.updatedAt) }}</td>
+                <td v-if="canEdit">
+                  <button class="btn btn-sm btn-secondary" @click="editResource(res)">✏️</button>
+                  <button class="btn btn-sm btn-danger" @click="deleteResource(res.id)">🗑️</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-if="!resources.length" class="empty-message">Ресурсы не добавлены</div>
+      </div>
+    </div>
+
+    <!-- История перемещений -->
+    <div class="section" v-if="moveHistory.length">
+      <h3>История перемещений</h3>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr><th>Дата</th><th>Откуда</th><th>Куда</th><th>Пользователь</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="rec in moveHistory" :key="rec.id">
+              <td>{{ rec.date }}</td>
+              <td>{{ rec.fromLocation || '-' }}</td>
+              <td>{{ rec.toLocation }}</td>
+              <td>{{ rec.userId || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- История комплектаций -->
     <div class="section" v-if="compositionHistory.length">
       <h3>История комплектаций</h3>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Дата</th>
-            <th>Действие</th>
-            <th>Узел</th>
-            <th>Пользователь</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="rec in compositionHistory" :key="rec.id">
-            <td>{{ rec.date }}</td>
-            <td>{{ rec.action === 'add' ? '➕ Добавлен в состав' : '➖ Удалён из состава' }}</td>
-            <td>{{ getChildName(rec.childId) }} (ID {{ rec.childId }})</td>
-            <td>{{ rec.userId || '-' }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr><th>Дата</th><th>Действие</th><th>Узел</th><th>Пользователь</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="rec in compositionHistory" :key="rec.id">
+              <td>{{ rec.date }}</td>
+              <td>{{ rec.action === 'add' ? '➕ Добавлен в состав' : '➖ Удалён из состава' }}</td>
+              <td>{{ getChildName(rec.childId) }} (ID {{ rec.childId }})</td
+              ><td>{{ rec.userId || '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
-    
 
     <!-- Модальные окна -->
     <EquipmentForm ref="formRef" @saved="refresh" />
@@ -174,14 +191,19 @@
     <div class="modal-overlay" v-if="showMoveModal">
       <div class="modal-content">
         <div class="modal-header">Перемещение узла</div>
-        <div class="form-group"><label>Новое местоположение</label><input v-model="newLocation" class="form-control" /></div>
-        <div class="modal-footer"><button class="btn btn-secondary" @click="closeMoveModal">Отмена</button><button class="btn btn-primary" @click="saveMove">Переместить</button></div>
+        <div class="form-group">
+          <label>Новое местоположение (текст)</label>
+          <input v-model="newLocation" class="form-control" />
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="closeMoveModal">Отмена</button>
+          <button class="btn btn-primary" @click="saveMove">Переместить</button>
+        </div>
       </div>
     </div>
   </div>
   <div v-else class="card">Загрузка...</div>
 </template>
-
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
@@ -244,14 +266,12 @@ function getParentName() {
 }
 
 function goToParent() {
-  if (node.value && node.value.parentId) {
-    router.push(`/equipment/${node.value.parentId}`);
-  }
+  if (node.value && node.value.parentId) router.push(`/equipment/${node.value.parentId}`);
 }
 
 function getChildName(childId: number): string {
-  const childNode = store.getNode(childId);
-  return childNode ? childNode.name : `Узел ${childId}`;
+  const nodeChild = store.getNode(childId);
+  return nodeChild ? nodeChild.name : `Узел ${childId}`;
 }
 
 function loadById(id?: number) {
@@ -260,23 +280,15 @@ function loadById(id?: number) {
   if (node.value) {
     children.value = store.nodes.filter((n: any) => n.parentId === targetId && !n.isDeleted);
     resources.value = store.getResourcesForNode(targetId);
-    moveHistory.value = store.getMoveHistoryForNode(targetId);      // ✅
-    compositionHistory.value = store.getCompositionHistoryForNode(targetId); // ✅
+    moveHistory.value = store.getMoveHistoryForNode(targetId);
+    compositionHistory.value = store.getCompositionHistoryForNode(targetId);
   }
 }
 
-function refresh() {
-  loadById();
-}
+function refresh() { loadById(); }
 
-function goBack() {
-  router.push('/equipment');
-}
-
-function editNode() {
-  formRef.value?.open(node.value);
-}
-
+function goBack() { router.push('/equipment'); }
+function editNode() { formRef.value?.open(node.value); }
 function viewChild(id: number) {
   const childNode = store.getNode(id);
   if (childNode && childNode.isSI) {
@@ -285,7 +297,6 @@ function viewChild(id: number) {
     router.push(`/equipment/${id}`);
   }
 }
-
 async function deleteNode() {
   const ok = await confirmDialog.value?.show('Списание', 'Списать узел?');
   if (ok) {
@@ -293,14 +304,8 @@ async function deleteNode() {
     router.push('/equipment');
   }
 }
-
-function openMoveModal() {
-  newLocation.value = node.value.location || '';
-  showMoveModal.value = true;
-}
-function closeMoveModal() {
-  showMoveModal.value = false;
-}
+function openMoveModal() { newLocation.value = node.value.location || ''; showMoveModal.value = true; }
+function closeMoveModal() { showMoveModal.value = false; }
 function saveMove() {
   const oldLocation = node.value.location || '';
   if (newLocation.value !== oldLocation) {
@@ -311,11 +316,7 @@ function saveMove() {
   closeMoveModal();
 }
 
-function openAddChildModal() {
-  if (node.value) {
-    addChildModalRef.value?.open(node.value.id);
-  }
-}
+function openAddChildModal() { if (node.value) addChildModalRef.value?.open(node.value.id); }
 async function removeChild(childId: number) {
   const ok = await confirmDialog.value?.show('Удаление из состава', 'Удалить узел из состава?');
   if (ok) {
@@ -324,17 +325,9 @@ async function removeChild(childId: number) {
   }
 }
 
-function openAddResourceForm() {
-  if (node.value) {
-    resourceFormRef.value?.open(node.value.id);
-  }
-}
-function goToResources() {
-  router.push({ path: '/resources', query: { nodeId: node.value.id.toString() } });
-}
-async function editResource(res: any) {
-  resourceFormRef.value?.open(node.value.id, res);
-}
+function openAddResourceForm() { if (node.value) resourceFormRef.value?.open(node.value.id); }
+function goToResources() { router.push({ path: '/resources', query: { nodeId: node.value.id.toString() } }); }
+async function editResource(res: any) { resourceFormRef.value?.open(node.value.id, res); }
 async function deleteResource(id: number) {
   if (confirm('Удалить ресурс?')) {
     store.deleteResource(id);
@@ -357,13 +350,70 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; background: #f8f9fa; padding: 16px; border-radius: 8px; }
-.info-col { display: flex; flex-direction: column; gap: 12px; }
-.info-row { display: flex; justify-content: space-between; border-bottom: 1px solid #e0e4e8; padding-bottom: 4px; }
-.info-row strong { width: 160px; }
-.section { margin-top: 20px; }
-.empty-message { color: #999; font-style: italic; padding: 10px; }
-.clickable-link { cursor: pointer; color: #2c5f8a; text-decoration: underline; }
-.clickable-link:hover { color: #1e4566; }
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+}
+.info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #e0e4e8;
+  padding-bottom: 4px;
+}
+.info-row strong {
+  width: 160px;
+}
+.section {
+  margin-top: 20px;
+}
+.subsection {
+  margin-top: 16px;
+  margin-left: 16px;
+}
+.empty-message {
+  color: #999;
+  font-style: italic;
+  padding: 10px;
+}
+.clickable-link {
+  cursor: pointer;
+  color: #2c5f8a;
+  text-decoration: underline;
+}
+.clickable-link:hover {
+  color: #1e4566;
+}
+.table-wrapper {
+  overflow-x: auto;
+  width: 100%;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+}
+.data-table {
+  min-width: 600px;
+  white-space: nowrap;
+  border-collapse: collapse;
+  width: 100%;
+}
+.data-table th, .data-table td {
+  border: 1px solid #e0e4e8;
+  padding: 8px 12px;
+  text-align: left;
+}
 </style>
