@@ -1,132 +1,120 @@
 <template>
   <div class="modal-overlay" v-if="visible">
-    <div class="modal-content" style="width: 450px">
-      <div class="modal-header">
-        {{ isEdit ? 'Редактирование пользователя' : 'Добавление пользователя' }}
-      </div>
-
-      <div class="form-group">
-        <label>Логин*</label>
-        <input type="text" v-model="form.login" class="form-control" />
-      </div>
-
-      <div class="form-group">
-        <label>Пароль*</label>
-        <input type="password" v-model="form.password" class="form-control" />
-      </div>
-
-      <div class="form-group">
-        <label>ФИО*</label>
-        <input type="text" v-model="form.name" class="form-control" />
-      </div>
-
-      <div class="form-group">
-        <label>Роль</label>
-        <select v-model="form.role" class="form-control">
-          <option value="operator">Оператор</option>
-          <option value="admin">Администратор</option>
-        </select>
-      </div>
-
-      <div v-if="error" class="error-text">{{ error }}</div>
-
-      <div class="modal-footer">
-        <button class="btn btn-secondary" @click="close">Отмена</button>
-        <button class="btn btn-primary" @click="save">Сохранить</button>
-      </div>
+    <div class="modal-content">
+      <div class="modal-header">{{ isEdit ? 'Редактирование пользователя' : 'Новый пользователь' }}</div>
+      <form @submit.prevent="save">
+        <div class="form-group">
+          <label>Логин *</label>
+          <input v-model="form.login" required />
+        </div>
+        <div class="form-group">
+          <label>Пароль *</label>
+          <input type="password" v-model="form.password" :required="!isEdit" />
+          <small v-if="isEdit">Оставьте пустым, если не хотите менять</small>
+        </div>
+        <div class="form-group">
+          <label>ФИО *</label>
+          <input v-model="form.full_name" required />
+        </div>
+        <div class="form-group">
+          <label>Роль *</label>
+          <select v-model="form.role_id" required>
+            <option v-for="role in roles" :key="role.role_id" :value="role.role_id">{{ role.name }}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Статус</label>
+          <select v-model="form.is_active">
+            <option :value="true">Активен</option>
+            <option :value="false">Заблокирован</option>
+          </select>
+        </div>
+        <div v-if="error" class="error-text">{{ error }}</div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" @click="close">Отмена</button>
+          <button type="submit" class="btn btn-primary">Сохранить</button>
+        </div>
+      </form>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import { useUsersStore } from '../stores/usersStore'
+import { ref, reactive, onMounted } from 'vue';
+import { useUsersStore } from '../stores/usersStore';
 
-const store = useUsersStore()
-const visible = ref(false)
-const isEdit = ref(false)
-const editId = ref<number | null>(null)
-const error = ref('')
+const store = useUsersStore();
+const visible = ref(false);
+const isEdit = ref(false);
+const editId = ref<string | null>(null);
+const error = ref('');
+const roles = ref<any[]>([]);
 
 const form = reactive({
   login: '',
   password: '',
-  name: '',
-  role: 'operator' as 'operator' | 'admin',
-})
+  full_name: '',
+  role_id: '',
+  is_active: true,
+});
 
-function reset() {
-  form.login = ''
-  form.password = ''
-  form.name = ''
-  form.role = 'operator'
-  error.value = ''
-  isEdit.value = false
-  editId.value = null
+async function loadRoles() {
+  await store.fetchRoles();
+  roles.value = store.roles;
 }
 
 function open(user?: any) {
-  reset()
+  loadRoles();
   if (user) {
-    isEdit.value = true
-    editId.value = user.id
-    form.login = user.login
-    form.password = user.password
-    form.name = user.name
-    form.role = user.role
+    isEdit.value = true;
+    editId.value = user.user_id;
+    form.login = user.login;
+    form.full_name = user.full_name;
+    form.role_id = user.role_id;
+    form.is_active = user.is_active;
+    form.password = ''; // очищаем пароль при редактировании
+  } else {
+    reset();
   }
-  visible.value = true
+  visible.value = true;
+}
+
+function reset() {
+  isEdit.value = false;
+  editId.value = null;
+  form.login = '';
+  form.password = '';
+  form.full_name = '';
+  form.role_id = roles.value[0]?.role_id || '';
+  form.is_active = true;
+  error.value = '';
 }
 
 function close() {
-  visible.value = false
+  visible.value = false;
 }
 
-function validate(): boolean {
-  if (!form.login.trim()) {
-    error.value = 'Введите логин'
-    return false
-  }
-  if (!form.password.trim()) {
-    error.value = 'Введите пароль'
-    return false
-  }
-  if (!form.name.trim()) {
-    error.value = 'Введите ФИО'
-    return false
-  }
+async function save() {
+  try {
+    const data: any = {
+      login: form.login,
+      full_name: form.full_name,
+      role_id: form.role_id,
+      is_active: form.is_active,
+    };
+    if (form.password) data.password = form.password;
 
-  // Проверка уникальности логина (при добавлении)
-  if (!isEdit.value) {
-    const existing = store.getUserByLogin(form.login)
-    if (existing) {
-      error.value = 'Пользователь с таким логином уже существует'
-      return false
+    if (isEdit.value && editId.value) {
+      await store.updateUser(editId.value, data);
+    } else {
+      await store.createUser(data);
     }
+    close();
+    window.dispatchEvent(new Event('user-saved'));
+  } catch (err: any) {
+    error.value = err.message;
   }
-
-  error.value = ''
-  return true
 }
 
-function save() {
-  if (!validate()) return
-
-  const data = {
-    login: form.login,
-    password: form.password,
-    name: form.name,
-    role: form.role,
-  }
-
-  if (isEdit.value && editId.value) {
-    store.updateUser(editId.value, data)
-  } else {
-    store.addUser(data)
-  }
-  close()
-  window.dispatchEvent(new Event('user-saved'))
-}
-
-defineExpose({ open })
+defineExpose({ open });
 </script>

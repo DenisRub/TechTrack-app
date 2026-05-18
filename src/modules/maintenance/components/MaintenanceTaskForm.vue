@@ -1,174 +1,98 @@
 <template>
   <div class="modal-overlay" v-if="visible">
-    <div class="modal-content" style="width: 500px;">
-      <div class="modal-header">{{ isEdit ? 'Редактирование задачи' : 'Добавление задачи ТО' }}</div>
-      
-      <div class="form-group">
-        <label>Оборудование*</label>
-        <select v-model="formData.nodeId" class="form-control">
-          <option :value="null">-- Выберите оборудование --</option>
-          <option v-for="node in availableNodes" :key="node.id" :value="node.id">
-            {{ node.name }} ({{ node.type === 'aggregate' ? 'Агрегат' : 'Блок' }})
-          </option>
-        </select>
-      </div>
-      
-      <div class="form-group">
-        <label>Рекомендуемая дата ТО*</label>
-        <input type="date" v-model="formData.recommendedDate" class="form-control" />
-      </div>
-      
-      <div class="form-group">
-        <label>Тип обслуживания*</label>
-        <select v-model="formData.serviceType" class="form-control">
-          <option value="плановое ТО">Плановое ТО</option>
-          <option value="внеплановое ТО">Внеплановое ТО</option>
-          <option value="капитальный ремонт">Капитальный ремонт</option>
-          <option value="текущий ремонт">Текущий ремонт</option>
-          <option value="аварийный ремонт">Аварийный ремонт</option>
-          <option value="модернизация">Модернизация</option>
-        </select>
-      </div>
-      
-      <div class="form-group">
-        <label>Статус</label>
-        <select v-model="formData.status" class="form-control">
-          <option value="pending">Ожидает</option>
-          <option value="in_progress">В работе</option>
-          <option value="completed">Выполнено</option>
-          <option value="not_completed">Не выполнено</option>
-        </select>
-      </div>
-      
-      <div class="form-group">
-        <label>Примечания</label>
-        <textarea v-model="formData.notes" rows="2" class="form-control"></textarea>
-      </div>
-      
-      <div v-if="error" class="error-text">{{ error }}</div>
-      
-      <div class="modal-footer">
-        <button class="btn btn-secondary" @click="close">Отмена</button>
-        <button class="btn btn-primary" @click="save">Сохранить</button>
-      </div>
+    <div class="modal-content">
+      <div class="modal-header">{{ isEdit ? 'Редактирование задачи' : 'Новая задача' }}</div>
+      <form @submit.prevent="save">
+        <div class="form-group"><label>Узел *</label>
+          <select v-model="form.node_id" required>
+            <option v-for="n in nodes" :key="n.node_id" :value="n.node_id">{{ n.name }}</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Тип ТО *</label>
+          <select v-model="form.type_id" required>
+            <option value="1">Плановое ТО</option>
+            <option value="2">Внеплановое ТО</option>
+            <option value="3">Капитальный ремонт</option>
+            <option value="4">Аварийный ремонт</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Статус</label>
+          <select v-model="form.status_id">
+            <option value="1">Ожидает</option>
+            <option value="2">В работе</option>
+            <option value="3">Выполнено</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Примечания</label><textarea v-model="form.notes"></textarea></div>
+        <div v-if="error" class="error-text">{{ error }}</div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" @click="close">Отмена</button>
+          <button type="submit" class="btn btn-primary">Сохранить</button>
+        </div>
+      </form>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useMaintenanceStore } from '../stores/maintenanceStore';
 import { useEquipmentStore } from '@/modules/equipment/stores/equipmentStore';
 
-const maintenanceStore = useMaintenanceStore();
-const equipmentStore = useEquipmentStore();
+const store = useMaintenanceStore();
 const visible = ref(false);
 const isEdit = ref(false);
-const editId = ref<number | null>(null);
-const planId = ref<number | null>(null);
+const editId = ref<string | null>(null);
 const error = ref('');
-const availableNodes = ref<any[]>([]);
-
-// Форма с данными
-const formData = reactive({
-  nodeId: null as number | null,
-  recommendedDate: '',
-  serviceType: 'плановое ТО' as const,
-  status: 'pending' as const,
+const nodes = ref<any[]>([]);
+const form = reactive({
+  node_id: '',
+  type_id: 1,
+  status_id: 1,
   notes: '',
 });
 
-// Функция для получения текущей даты в формате YYYY-MM-DD
-function getCurrentDate(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+async function loadNodes() {
+  const eqStore = useEquipmentStore();
+  await eqStore.fetchNodes();
+  nodes.value = eqStore.nodes;
 }
 
-// Загрузка доступного оборудования (только блоки, не агрегаты)
-function loadNodes() {
-  availableNodes.value = equipmentStore.nodes.filter((n: any) => !n.isDeleted && n.type === 'block');
-  console.log('Загружено оборудование для задачи:', availableNodes.value.length);
-}
-
-function open(pId: number, task?: any) {
-  console.log('open вызван, planId:', pId, 'task:', task);
+function open(task?: any) {
   loadNodes();
-  planId.value = pId;
-  reset();
-  
   if (task) {
     isEdit.value = true;
-    editId.value = task.id;
-    formData.nodeId = task.nodeId;
-    formData.recommendedDate = task.recommendedDate;
-    formData.serviceType = task.serviceType;
-    formData.status = task.status;
-    formData.notes = task.notes || '';
-    console.log('Редактирование задачи:', task);
+    editId.value = task.maintenance_id;
+    form.node_id = task.node_id;
+    form.type_id = task.type_id;
+    form.status_id = task.status_id;
+    form.notes = task.notes || '';
+  } else {
+    reset();
   }
   visible.value = true;
 }
-
 function reset() {
-  formData.nodeId = null;
-  formData.recommendedDate = getCurrentDate();
-  formData.serviceType = 'плановое ТО';
-  formData.status = 'pending';
-  formData.notes = '';
-  error.value = '';
   isEdit.value = false;
   editId.value = null;
+  form.node_id = '';
+  form.type_id = 1;
+  form.status_id = 1;
+  form.notes = '';
 }
-
-function close() {
-  visible.value = false;
+function close() { visible.value = false; }
+async function save() {
+  try {
+    if (isEdit.value && editId.value) {
+      await store.updateTask(editId.value, form);
+    } else {
+      await store.createTask(form);
+    }
+    close();
+    window.dispatchEvent(new Event('task-saved'));
+  } catch (err: any) {
+    error.value = err.message;
+  }
 }
-
-function save() {
-  console.log('save вызван, formData:', formData);
-  
-  if (!formData.nodeId) {
-    error.value = 'Выберите оборудование';
-    return;
-  }
-  if (!formData.recommendedDate) {
-    error.value = 'Укажите рекомендуемую дату ТО';
-    return;
-  }
-  
-  const node = availableNodes.value.find(n => n.id === formData.nodeId);
-  if (!node) {
-    error.value = 'Оборудование не найдено';
-    return;
-  }
-  
-  const data = {
-    planId: planId.value!,
-    nodeId: formData.nodeId,
-    nodeName: node.name,
-    nodeLocation: node.location || '',
-    recommendedDate: formData.recommendedDate,
-    serviceType: formData.serviceType,
-    status: formData.status,
-    notes: formData.notes || '',
-  };
-  
-  console.log('Сохраняемые данные:', data);
-  
-  if (isEdit.value && editId.value) {
-    maintenanceStore.updateTask(editId.value, data);
-    console.log('Задача обновлена');
-  } else {
-    maintenanceStore.addTask(data);
-    console.log('Задача добавлена');
-  }
-  
-  close();
-  window.dispatchEvent(new Event('task-saved'));
-}
-
 defineExpose({ open });
 </script>

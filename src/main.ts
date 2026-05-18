@@ -1,15 +1,18 @@
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import App from './App.vue'
-import router from './router'
-import './style.css'
-import JsonEditorVue from 'json-editor-vue'
-import 'jsoneditor/dist/jsoneditor.min.css' // стили
+import { createApp } from 'vue';
+import { createPinia } from 'pinia';
+import App from './App.vue';
+import router from './router';
+import './style.css';
 
-// после создания app:
+const pinia = createPinia();
+const app = createApp(App);
 
-const app = createApp(App)
-app.use(createPinia())
-app.use(router)
-app.mount('#app')
-app.use(JsonEditorVue)
+app.use(pinia);
+app.use(router);
+
+// Инициализация auth store (проверка токена)
+import { useAuthStore } from './stores/authStore';
+const authStore = useAuthStore();
+authStore.checkAuth();
+
+app.mount('#app');
