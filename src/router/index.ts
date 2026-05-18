@@ -72,18 +72,12 @@ const router = createRouter({
 });
 
 // Защита маршрутов (требуется авторизация)
-router.beforeEach(async (to: any, _from: any, next: any) => {
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore();
-  if (to.meta.requiresAuth) {
-    const isAuthenticated = authStore.checkAuth();
-    if (!isAuthenticated) {
-      const me = await authStore.fetchMe();
-      if (!me) {
-        next('/login');
-        return;
-      }
-    }
-    next();
+  if (to.meta.requiresAuth && !authStore.user) {
+    await authStore.fetchMe();
+    if (!authStore.user) next('/login');
+    else next();
   } else {
     next();
   }

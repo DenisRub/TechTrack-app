@@ -159,35 +159,10 @@ const stats = ref({
   maintenance: { plansCount: 0, overdueTasks: 0, nearTasks: 0 },
 })
 
-const urgentAlerts = ref<{ id: number; type: string; message: string }[]>([])
+const urgentAlerts = ref<{ id: string; type: string; message: string }[]>([])
 
 function goToModule(path: string) {
   router.push(path)
-}
-
-function getResourceStatus(res: any): 'critical' | 'warning' | 'normal' {
-  if (res.isDeleted) return 'normal'
-  if (res.timeToService !== undefined && res.timeToService < 0) return 'critical'
-  if (res.timeToService !== undefined && res.timeToService < 1) return 'warning'
-  if (res.remainingResource) {
-    const remaining = parseFloat(res.remainingResource)
-    if (!isNaN(remaining)) {
-      if (remaining <= 0) return 'critical'
-      if (remaining < 20) return 'warning'
-    }
-  }
-  if (res.remainingResource && typeof res.remainingResource === 'string') {
-    const num = parseFloat(res.remainingResource)
-    if (!isNaN(num) && num < 10) return 'critical'
-    if (!isNaN(num) && num < 30) return 'warning'
-  }
-  if (res.serviceLife && res.registrationDate) {
-    const yearsPassed = new Date().getFullYear() - new Date(res.registrationDate).getFullYear()
-    const remaining = res.serviceLife - yearsPassed
-    if (remaining < 0) return 'critical'
-    if (remaining < 1) return 'warning'
-  }
-  return 'normal'
 }
 
 function getDaysUntil(dateStr: string): number {
@@ -199,20 +174,22 @@ function getDaysUntil(dateStr: string): number {
 }
 
 async function loadStats() {
-  const equipmentNodes = equipmentStore.flatList || equipmentStore.nodes || []
-  stats.value.equipment.total = equipmentNodes.filter((n: any) => !n.isDeleted).length
-  stats.value.equipment.aggregates = equipmentNodes.filter((n: any) => n.type === 'aggregate' && !n.isDeleted).length
-  stats.value.equipment.blocks = equipmentNodes.filter((n: any) => n.type === 'block' && !n.isDeleted).length
+  // Оборудование
+  await equipmentStore.fetchNodes()
+  const nodes = equipmentStore.nodes || []
+  stats.value.equipment.total = nodes.length
+  stats.value.equipment.aggregates = nodes.filter((n: any) => n.type === 'aggregate').length
+  stats.value.equipment.blocks = nodes.filter((n: any) => n.type === 'block').length
 
-  const siList = siStore.allInstruments || []
-  stats.value.si.total = siList.filter((s: any) => !s.isDeleted).length
+  // СИ
+  await siStore.fetchInstruments()
+  const instruments = siStore.instruments || []
+  stats.value.si.total = instruments.length
   let expiringSoon = 0
   let expired = 0
-  for (const si of siList) {
-    if (si.isDeleted) continue
-    const nextDate = siStore.getNextVerificationDate(si.id)
-    if (nextDate) {
-      const days = getDaysUntil(nextDate)
+  for (const si of instruments) {
+    if (si.next_calibration_date) {
+      const days = getDaysUntil(si.next_calibration_date)
       if (days < 0) expired++
       else if (days <= 30) expiringSoon++
     }
@@ -220,39 +197,59 @@ async function loadStats() {
   stats.value.si.expiringSoon = expiringSoon
   stats.value.si.expired = expired
 
+  // Ресурсы
+  await resourcesStore.fetchResources()
   const resources = resourcesStore.resources || []
   stats.value.resources.total = resources.length
   let criticalCount = 0
   let warningCount = 0
   for (const res of resources) {
-    const status = getResourceStatus(res)
-    if (status === 'critical') criticalCount++
-    else if (status === 'warning') warningCount++
+    // Проверяем ресурсы на критичность (например, остаточный ресурс < 10%)
+    const params = res.resource_params || {}
+    const remaining = params.remainingPercent || params.remainingResource || 100
+    if (remaining < 10) criticalCount++
+    else if (remaining < 30) warningCount++
   }
   stats.value.resources.critical = criticalCount
   stats.value.resources.warning = warningCount
 
-  const plans = maintenanceStore.allPlans || []
+  // Обслуживание
+  await maintenanceStore.fetchPlans()
+  const plans = maintenanceStore.plans || []
   stats.value.maintenance.plansCount = plans.length
+  // Загрузим задачи, чтобы посчитать просроченные и ближайшие
+  await maintenanceStore.fetchTasks()
+  const tasks = maintenanceStore.tasks || []
+  let overdueTasks = 0
+  let nearTasks = 0
+  for (const task of tasks) {
+    if (task.recommended_date) {
+      const days = getDaysUntil(task.recommended_date)
+      if (days < 0) overdueTasks++
+      else if (days <= 30) nearTasks++
+    }
+  }
+  stats.value.maintenance.overdueTasks = overdueTasks
+  stats.value.maintenance.nearTasks = nearTasks
 
+  // Срочные уведомления
   urgentAlerts.value = []
-  for (const si of siList) {
-    if (si.isDeleted) continue
-    const nextDate = siStore.getNextVerificationDate(si.id)
-    if (nextDate && getDaysUntil(nextDate) < 0) {
+  for (const si of instruments) {
+    if (si.next_calibration_date && getDaysUntil(si.next_calibration_date) < 0) {
       urgentAlerts.value.push({
-        id: si.id,
+        id: si.instrument_id,
         type: 'danger',
-        message: `СИ "${si.name}" (${si.tabNumber}): поверка просрочена!`,
+        message: `СИ "${si.name}" (${si.tab_number}): поверка просрочена!`,
       })
     }
   }
   for (const res of resources) {
-    if (getResourceStatus(res) === 'critical') {
+    const params = res.resource_params || {}
+    if (params.remainingPercent && params.remainingPercent < 10) {
       urgentAlerts.value.push({
-        id: res.id,
+        id: res.resource_id,
         type: 'danger',
-        message: `Ресурс "${res.name}" (${res.mark || ''}) в критическом состоянии!`,
+        message: `Ресурс "${res.node_name || 'оборудования'}": критическое состояние!`,
       })
     }
   }
@@ -264,7 +261,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* Все стили остаются как в вашем оригинале */
+/* все стили остаются без изменений — они уже есть в вашем оригинале */
 .dashboard {
   max-width: 1400px;
   margin: 0 auto;

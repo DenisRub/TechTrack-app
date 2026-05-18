@@ -1,72 +1,59 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { apiFetch } from '@/api/client';
+import { authApi } from '@/api/auth';
 
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref<any>(null);
-  const token = ref(localStorage.getItem('token') || null);
+  const user = ref(null);
   const isLoading = ref(false);
-  const error = ref<string | null>(null);
-
-  function setUserFromStorage() {
-    const stored = localStorage.getItem('user');
-    if (stored) {
-      try {
-        user.value = JSON.parse(stored);
-      } catch (e) {
-        console.error('Failed to parse user from storage', e);
-      }
-    }
-  }
+  const error = ref('');
 
   async function login(login: string, password: string) {
     isLoading.value = true;
-    error.value = null;
+    error.value = '';
     try {
-      const data = await apiFetch('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ login, password }),
-      });
-      if (data.token) {
-        token.value = data.token;
-        user.value = data.user;
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        return true;
-      }
-      throw new Error(data.error || 'Ошибка входа');
+      const response = await authApi.login(login, password);
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      user.value = response.user;
+      return true;
     } catch (err: any) {
-      error.value = err.message;
+      error.value = err.message || 'Ошибка входа';
       return false;
     } finally {
       isLoading.value = false;
     }
   }
 
-  function logout() {
-    token.value = null;
-    user.value = null;
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-  }
-
-  function checkAuth() {
-    setUserFromStorage();
-    return !!token.value && !!user.value;
-  }
-
-  // Опционально: получить текущего пользователя с бэка (проверить валидность токена)
+  // Добавить этот метод
   async function fetchMe() {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
     try {
-      const data = await apiFetch('/auth/me');
-      user.value = data.user;
-      localStorage.setItem('user', JSON.stringify(data.user));
-      return data.user;
+      const response = await authApi.getCurrentUser();
+      user.value = response.user;
+      return response.user;
     } catch (err) {
+      console.error('fetchMe error:', err);
       logout();
       return null;
     }
   }
 
-  return { user, token, isLoading, error, login, logout, checkAuth, fetchMe };
+  function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    user.value = null;
+  }
+
+  function checkAuth() {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        user.value = JSON.parse(userData);
+      }
+    }
+  }
+
+  return { user, isLoading, error, login, logout, checkAuth, fetchMe };
 });

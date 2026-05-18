@@ -25,14 +25,14 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue';
-import { useEquipmentStore } from '@/modules/equipment/stores/equipmentStore';
+import { useResourcesStore } from '@/modules/resources/stores/resourcesStore';
 
-const store = useEquipmentStore();
+const resourcesStore = useResourcesStore();
 
 const visible = ref(false);
 const isEdit = ref(false);
-const editId = ref<number | null>(null);
-const nodeId = ref<number | null>(null);
+const editId = ref<string | null>(null);
+const nodeId = ref<string | null>(null);   // UUID как строка
 const error = ref('');
 const saving = ref(false);
 
@@ -50,12 +50,12 @@ function getCurrentDate(): string {
   return `${year}-${month}-${day}`;
 }
 
-function open(nId: number, res?: any) {
+function open(nId: string, res?: any) {
   reset();
   nodeId.value = nId;
   if (res) {
     isEdit.value = true;
-    editId.value = res.id;
+    editId.value = res.resource_id;
     form.name = res.name;
     form.value = res.value;
     form.unit = res.unit || '';
@@ -84,24 +84,30 @@ async function save() {
   }
   saving.value = true;
   error.value = '';
-  const data = {
-    nodeId: nodeId.value!,
+
+  // Формируем данные для бэкенда
+  const resourceParams = {
     name: form.name,
     value: form.value,
     unit: form.unit,
-    updatedAt: getCurrentDate(),
   };
+  const data = {
+    node_id: nodeId.value!,
+    registration_date: getCurrentDate(),
+    resource_params: resourceParams,
+    note: '',
+  };
+
   try {
     if (isEdit.value && editId.value) {
-      store.updateResource(editId.value, data);
+      await resourcesStore.updateResource(editId.value, data);
     } else {
-      store.addResource(data);
+      await resourcesStore.createResource(data);
     }
-    // Принудительно отправляем событие обновления
     window.dispatchEvent(new Event('resource-saved'));
     close();
-  } catch (err) {
-    error.value = 'Ошибка сохранения ресурса';
+  } catch (err: any) {
+    error.value = err.message || 'Ошибка сохранения ресурса';
   } finally {
     saving.value = false;
   }

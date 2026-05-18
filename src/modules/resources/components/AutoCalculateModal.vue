@@ -18,10 +18,10 @@
       </div>
       <div class="form-group">
         <label>Ресурсы для расчёта</label>
-        <div v-for="res in resources" :key="res.id" class="checkbox-item">
+        <div v-for="res in resources" :key="res.resource_id" class="checkbox-item">
           <label>
-            <input type="checkbox" v-model="selectedResources" :value="res.id" />
-            {{ res.name }} ({{ res.nodeName }})
+            <input type="checkbox" v-model="selectedResources" :value="res.resource_id" />
+            {{ res.name }} ({{ res.node_name }})
           </label>
         </div>
       </div>
@@ -42,7 +42,7 @@ const store = useResourcesStore();
 const visible = ref(false);
 const workHours = ref('8760');
 const customHours = ref(8760);
-const selectedResources = ref<number[]>([]);
+const selectedResources = ref<string[]>([]);
 const error = ref('');
 
 const resources = computed(() => store.resources);
@@ -50,12 +50,12 @@ const resources = computed(() => store.resources);
 const emit = defineEmits(['calculated']);
 
 function open() {
-  selectedResources.value = resources.value.map(r => r.id);
+  selectedResources.value = resources.value.map(r => r.resource_id);
   visible.value = true;
 }
 function close() { visible.value = false; }
 
-function calculate() {
+async function calculate() {
   let hours = parseInt(workHours.value);
   if (workHours.value === 'custom') hours = customHours.value;
   
@@ -66,9 +66,18 @@ function calculate() {
   
   let calculated = 0;
   for (const res of resources.value) {
-    if (selectedResources.value.includes(res.id)) {
-      const success = store.updateResourceByWorkMode(res.id, res.nodeId, hours);
-      if (success) calculated++;
+    if (selectedResources.value.includes(res.resource_id)) {
+      try {
+        // Вызываем API расчёта (не обновляет автоматически, только возвращает результат)
+        const result = await store.calculateResource(res.resource_id, hours);
+        if (result && result.calculated_resource_percent !== undefined) {
+          calculated++;
+          // Можно показать уведомление о результате
+          console.log(`Ресурс ${res.name}: рассчитанный процент = ${result.calculated_resource_percent}`);
+        }
+      } catch (err) {
+        console.error(err);
+      }
     }
   }
   

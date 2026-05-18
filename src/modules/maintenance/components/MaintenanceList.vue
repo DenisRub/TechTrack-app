@@ -56,14 +56,14 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="plan in filteredAndSortedPlans" :key="plan.id">
+          <tr v-for="plan in filteredAndSortedPlans" :key="plan.plan_id">
             <td>{{ plan.name }}</td>
-            <td>{{ formatDate(plan.startDate) }}</td>
-            <td>{{ formatDate(plan.endDate) }}</td>
+            <td>{{ formatDate(plan.start_date) }}</td>
+            <td>{{ plan.end_date ? formatDate(plan.end_date) : '—' }}</td>
             <td>
-              <button class="btn btn-sm btn-secondary" @click="viewPlan(plan.id)">Открыть</button>
+              <button class="btn btn-sm btn-secondary" @click="viewPlan(plan.plan_id)">Открыть</button>
               <button class="btn btn-sm btn-secondary" @click="editPlan(plan)">✏️</button>
-              <button class="btn btn-sm btn-danger" @click="deletePlan(plan.id)">🗑️</button>
+              <button class="btn btn-sm btn-danger" @click="deletePlan(plan.plan_id)">🗑️</button>
             </td>
           </tr>
           <tr v-if="filteredAndSortedPlans.length === 0">
@@ -128,16 +128,16 @@ const filteredAndSortedPlans = computed(() => {
 
   // Фильтрация по диапазону дат
   if (dateFrom.value) {
-    list = list.filter((p) => p.startDate >= dateFrom.value)
+    list = list.filter((p) => p.start_date >= dateFrom.value)
   }
   if (dateTo.value) {
-    list = list.filter((p) => p.startDate <= dateTo.value)
+    list = list.filter((p) => p.start_date <= dateTo.value)
   }
 
   // Сортировка
   list.sort((a, b) => {
-    let valA = a[sortField.value]
-    let valB = b[sortField.value]
+    let valA = a[sortField.value === 'startDate' ? 'start_date' : sortField.value === 'endDate' ? 'end_date' : sortField.value]
+    let valB = b[sortField.value === 'startDate' ? 'start_date' : sortField.value === 'endDate' ? 'end_date' : sortField.value]
     if (valA < valB) return sortOrder.value === 'asc' ? -1 : 1
     if (valA > valB) return sortOrder.value === 'asc' ? 1 : -1
     return 0
@@ -156,7 +156,7 @@ function resetFilters() {
   dateTo.value = ''
 }
 
-function viewPlan(id: number) {
+function viewPlan(id: string) {
   router.push(`/maintenance/${id}`)
 }
 
@@ -168,7 +168,7 @@ function editPlan(plan: any) {
   formRef.value?.open(plan)
 }
 
-async function deletePlan(id: number) {
+async function deletePlan(id: string) {
   const ok = await confirmDialog.value?.show('Удаление', 'Удалить план-график?')
   if (ok) store.deletePlan(id)
 }
@@ -181,8 +181,8 @@ function refresh() {
 function getExportData() {
   return filteredAndSortedPlans.value.map((p) => ({
     'Название плана': p.name,
-    'Дата начала': formatDate(p.startDate),
-    'Дата окончания': formatDate(p.endDate),
+    'Дата начала': formatDate(p.start_date),
+    'Дата окончания': p.end_date ? formatDate(p.end_date) : '—',
   }))
 }
 
@@ -232,54 +232,5 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.button-group {
-  display: flex;
-  gap: 10px;
-  position: relative;
-}
-.dropdown {
-  position: relative;
-}
-.dropdown-menu {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: 4px;
-  background: white;
-  border: 1px solid #e0e4e8;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  z-index: 100;
-  min-width: 220px;
-}
-.dropdown-item {
-  display: block;
-  width: 100%;
-  padding: 8px 12px;
-  text-align: left;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-}
-.dropdown-item:hover {
-  background-color: #f0f2f5;
-}
-.filter-panel {
-  background: #f8f9fa;
-  border: 1px solid #e0e4e8;
-  border-radius: 8px;
-  padding: 15px;
-  margin-bottom: 20px;
-}
-.filter-row {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-.filter-label {
-  font-size: 14px;
-  color: #6c757d;
-}
+/* стили без изменений */
 </style>

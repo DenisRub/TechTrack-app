@@ -30,6 +30,7 @@ export const useSIStore = defineStore('si', () => {
     }
   }
 
+  
   async function fetchInstrumentById(id: string) {
     isLoading.value = true;
     try {

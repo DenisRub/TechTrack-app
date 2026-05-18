@@ -44,6 +44,21 @@ export const useResourcesStore = defineStore('resources', () => {
     return updated;
   }
 
+  async function updateResourceByWorkMode(resourceId: string, nodeId: string, workHoursPerYear: number) {
+  try {
+    const calcResult = await calculateResource(resourceId, workHoursPerYear);
+    if (calcResult && calcResult.calculated_resource_percent !== undefined) {
+      const resource = await fetchResourceById(resourceId);
+      const newParams = { ...resource.resource_params, calculated_percent: calcResult.calculated_resource_percent };
+      await updateResource(resourceId, { resource_params: newParams });
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+}
   async function deleteResource(id: string) {
     await apiFetch(`/resources/${id}`, { method: 'DELETE' });
     await fetchResources();

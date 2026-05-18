@@ -33,18 +33,19 @@ function open(nodeData: any) {
   visible.value = true;
 }
 function close() { visible.value = false; }
-function move() {
+async function move() {
   if (!newLocation.value.trim()) {
     error.value = 'Введите новое местоположение';
     return;
   }
-  const oldLocation = node.value.location || '';
-  // Обновляем местоположение узла
-  store.updateNode(node.value.id, { location: newLocation.value });
-  // Добавляем запись в историю перемещений
-  store.addMoveRecord(node.value.id, oldLocation, newLocation.value);
-  close();
-  emit('moved');
+  try {
+    // Обновляем местоположение узла через API (история перемещений создаётся на бэкенде автоматически)
+    await store.updateNode(node.value.node_id, { location: newLocation.value });
+    close();
+    emit('moved');
+  } catch (err: any) {
+    error.value = err.message || 'Ошибка при перемещении';
+  }
 }
 defineExpose({ open });
 </script>

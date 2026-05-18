@@ -50,6 +50,7 @@ function open(plan?: any) {
   }
   visible.value = true;
 }
+
 function reset() {
   isEdit.value = false;
   editId.value = null;
@@ -58,22 +59,51 @@ function reset() {
   form.end_date = '';
   error.value = '';
 }
-function close() { visible.value = false; }
+
+function close() {
+  visible.value = false;
+}
+
 async function save() {
   try {
     if (isEdit.value && editId.value) {
-      await store.updatePlan(editId.value, form);
+      await store.updatePlan(editId.value, { 
+        name: form.name, 
+        start_date: form.start_date, 
+        end_date: form.end_date || null 
+      });
     } else {
-      const newPlan = await store.createPlan(form);
-      if (autoGenerate.value && newPlan.plan_id) {
-        await store.generatePlan(form.start_date, form.end_date || form.start_date);
+      const newPlan = await store.createPlan({ 
+        name: form.name, 
+        start_date: form.start_date, 
+        end_date: form.end_date || null 
+      });
+      if (autoGenerate.value && newPlan && newPlan.plan_id) {
+        // Проверяем, что дата начала определена
+        if (!form.start_date) {
+          error.value = 'Дата начала не указана';
+          return;
+        }
+        const endDate = form.end_date && form.end_date.trim() !== '' ? form.end_date : form.start_date;
+        await store.generatePlan(form.start_date, endDate);
       }
     }
     close();
     window.dispatchEvent(new Event('plan-saved'));
   } catch (err: any) {
-    error.value = err.message;
+    error.value = err.message || 'Ошибка сохранения плана';
   }
 }
+
 defineExpose({ open });
 </script>
+
+<style scoped>
+.form-row {
+  display: flex;
+  gap: 15px;
+}
+.form-row .form-group {
+  flex: 1;
+}
+</style>

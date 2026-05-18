@@ -6,7 +6,7 @@
         <label>Выберите узел</label>
         <select v-model="selectedChildId" class="form-control">
           <option :value="null">-- Выберите --</option>
-          <option v-for="node in availableNodes" :key="node.id" :value="node.id">
+          <option v-for="node in availableNodes" :key="node.node_id" :value="node.node_id">
             {{ node.name }} ({{ node.type === 'aggregate' ? 'Агрегат' : 'Блок' }})
           </option>
         </select>
@@ -26,39 +26,42 @@ import { useEquipmentStore } from '../stores/equipmentStore';
 
 const store = useEquipmentStore();
 const visible = ref(false);
-const parentId = ref<number | null>(null);
-const selectedChildId = ref<number | null>(null);
+const parentId = ref<string | null>(null);
+const selectedChildId = ref<string | null>(null);
 const error = ref('');
 
 const availableNodes = computed(() => {
   if (!parentId.value) return [];
-  // Все узлы, которые не удалены, не являются родителем и не уже в составе
-  const existingChildIds = store.nodes.filter(n => n.parentId === parentId.value).map(n => n.id);
-  return store.nodes.filter(n => 
-    !n.isDeleted && 
-    n.id !== parentId.value && 
-    !existingChildIds.includes(n.id)
+  // Все узлы, которые не списаны, не являются родителем и не уже в составе
+  const existingChildIds = store.nodes
+    .filter((n: any) => n.installed_in_node === parentId.value)
+    .map((n: any) => n.node_id);
+  return store.nodes.filter((n: any) => 
+    !n.write_off_date && 
+    n.node_id !== parentId.value && 
+    !existingChildIds.includes(n.node_id)
   );
 });
 
-function open(pId: number) {
+function open(pId: string) {
   parentId.value = pId;
   selectedChildId.value = null;
   error.value = '';
   visible.value = true;
 }
 function close() { visible.value = false; }
-function add() {
+async function add() {
   if (!selectedChildId.value) {
     error.value = 'Выберите узел';
     return;
   }
-  const success = store.addChild(parentId.value!, selectedChildId.value);
-  if (success) {
+  try {
+    // Обновляем дочерний узел: устанавливаем installed_in_node = parentId
+    await store.updateNode(selectedChildId.value, { installed_in_node: parentId.value });
     close();
     window.dispatchEvent(new Event('equipment-saved'));
-  } else {
-    error.value = 'Не удалось добавить узел (проверьте циклы или совместимость)';
+  } catch (err: any) {
+    error.value = err.message || 'Не удалось добавить узел';
   }
 }
 defineExpose({ open });

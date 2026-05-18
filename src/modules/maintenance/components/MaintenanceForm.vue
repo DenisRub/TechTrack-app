@@ -26,7 +26,6 @@
         <textarea v-model="form.description" rows="2" class="form-control"></textarea>
       </div>
       
-      <!-- Индикатор процесса авто-генерации -->
       <div v-if="generating" class="auto-message generating">
         🔄 Анализ оборудования и формирование плана...
       </div>
@@ -51,7 +50,7 @@ import { useMaintenanceStore } from '../stores/maintenanceStore';
 const store = useMaintenanceStore();
 const visible = ref(false);
 const isEdit = ref(false);
-const editId = ref<number | null>(null);
+const editId = ref<string | null>(null);
 const error = ref('');
 const autoMessage = ref('');
 const generating = ref(false);
@@ -64,16 +63,13 @@ const form = reactive({
   description: '',
 });
 
-// Валидация дат
 function validateDates() {
   if (!form.startDate || !form.endDate) {
     dateError.value = '';
     return;
   }
-  
   const start = new Date(form.startDate);
   const end = new Date(form.endDate);
-  
   if (end < start) {
     dateError.value = '❌ Дата окончания не может быть раньше даты начала!';
   } else {
@@ -81,7 +77,6 @@ function validateDates() {
   }
 }
 
-// Следим за изменением дат
 watch([() => form.startDate, () => form.endDate], () => {
   validateDates();
 });
@@ -90,10 +85,10 @@ function open(plan?: any) {
   reset();
   if (plan) {
     isEdit.value = true;
-    editId.value = plan.id;
+    editId.value = plan.plan_id;
     form.name = plan.name;
-    form.startDate = plan.startDate;
-    form.endDate = plan.endDate;
+    form.startDate = plan.start_date;
+    form.endDate = plan.end_date || '';
     form.description = plan.description || '';
   }
   visible.value = true;
@@ -121,8 +116,6 @@ async function save() {
     error.value = 'Укажите дату начала и окончания плана';
     return;
   }
-  
-  // Дополнительная проверка перед сохранением
   const start = new Date(form.startDate);
   const end = new Date(form.endDate);
   if (end < start) {
@@ -136,33 +129,32 @@ async function save() {
   
   try {
     if (isEdit.value && editId.value) {
-      // Редактирование существующего плана
       await store.updatePlan(editId.value, {
         name: form.name,
-        startDate: form.startDate,
-        endDate: form.endDate,
-        description: form.description,
+        start_date: form.startDate,
+        end_date: form.endDate,
       });
       autoMessage.value = 'План обновлён';
     } else {
-      // Создание нового плана с авто-генерацией
       const planData = {
         name: form.name || `План ТО на ${new Date(form.startDate).getFullYear()} год`,
-        startDate: form.startDate,
-        endDate: form.endDate,
-        description: form.description,
+        start_date: form.startDate,
+        end_date: form.endDate,
       };
-      
-      // Сохраняем план с автоматической генерацией задач
-      const newPlan = await store.addPlan(planData, true);
-      const tasksCount = store.getTasksForPlan(newPlan.id).length;
-      autoMessage.value = `План создан! Сформировано ${tasksCount} задач(а) на обслуживание.`;
+      // Создаём план через store.createPlan
+      const newPlan = await store.createPlan(planData);
+      // Если нужно автоматически сгенерировать задачи, вызываем store.generatePlan
+      if (newPlan && newPlan.plan_id) {
+        await store.generatePlan(form.startDate, form.endDate);
+        autoMessage.value = `План создан! Задачи сгенерированы автоматически.`;
+      } else {
+        autoMessage.value = 'План создан.';
+      }
     }
-    
     setTimeout(() => close(), 1500);
-  } catch (err) {
+  } catch (err: any) {
     console.error('Ошибка сохранения плана:', err);
-    error.value = 'Ошибка при сохранении плана';
+    error.value = err.message || 'Ошибка при сохранении плана';
   } finally {
     generating.value = false;
   }

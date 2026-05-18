@@ -12,7 +12,7 @@
     <div class="info-grid">
       <div class="info-row">
         <div class="info-label">ID</div>
-        <div class="info-value">{{ subsystem.id }}</div>
+        <div class="info-value">{{ subsystem.subsys_id }}</div>
       </div>
       <div class="info-row">
         <div class="info-label">Наименование</div>
@@ -27,16 +27,16 @@
         <div class="info-value">{{ getParentName() }}</div>
       </div>
       <div class="info-row">
-        <div class="info-label">Описание</div>
-        <div class="info-value">{{ subsystem.description || '-' }}</div>
+        <div class="info-label">Примечания</div>
+        <div class="info-value">{{ subsystem.note || '-' }}</div>
       </div>
       <div class="info-row">
         <div class="info-label">Дата создания</div>
-        <div class="info-value">{{ subsystem.createdAt }}</div>
+        <div class="info-value">{{ formatDate(subsystem.created_at) }}</div>
       </div>
       <div class="info-row">
         <div class="info-label">Дата обновления</div>
-        <div class="info-value">{{ subsystem.updatedAt }}</div>
+        <div class="info-value">{{ formatDate(subsystem.updated_at) }}</div>
       </div>
     </div>
 
@@ -49,27 +49,30 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useSubsystemsStore } from '../stores/subsystemsStore'
+import { useSubsystemStore } from '../stores/subsystemsStore'
 import SubsystemForm from './SubsystemForm.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import { formatDate } from '@/utils/dateUtils'
 
 const route = useRoute()
 const router = useRouter()
-const store = useSubsystemsStore()
+const store = useSubsystemStore()
 const formRef = ref()
 const confirmDialog = ref()
 
 const subsystem = ref<any>(null)
 
 function getParentName(): string {
-  if (!subsystem.value?.parentId) return '-'
-  const parent = store.getSubsystem(subsystem.value.parentId)
+  if (!subsystem.value?.parent_id) return '-'
+  const parent = store.subsystems.find(s => s.subsys_id === subsystem.value.parent_id)
   return parent ? parent.name : '-'
 }
 
-function loadData() {
-  const id = Number(route.params.id)
-  subsystem.value = store.getSubsystem(id)
+async function loadData() {
+  const id = route.params.id as string
+  // Получаем все подсистемы и находим нужную
+  await store.fetchAll()
+  subsystem.value = store.subsystems.find(s => s.subsys_id === id)
 }
 
 function goBack() {
@@ -83,7 +86,7 @@ function editSubsystem() {
 async function deleteSubsystem() {
   const ok = await confirmDialog.value?.show('Удаление', 'Удалить подсистему?')
   if (ok) {
-    store.deleteSubsystem(subsystem.value.id)
+    await store.remove(subsystem.value.subsys_id)
     router.back()
   }
 }
@@ -99,6 +102,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* стили без изменений */
 .info-grid {
   background: #f8f9fa;
   border-radius: 8px;

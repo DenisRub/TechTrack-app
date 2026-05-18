@@ -10,21 +10,12 @@
 
       <div class="form-group">
         <label>Дата начала*</label>
-        <input type="date" v-model="form.startDate" class="form-control" />
+        <input type="date" v-model="form.start_date" class="form-control" />
       </div>
 
       <div class="form-group">
         <label>Дата окончания*</label>
-        <input type="date" v-model="form.endDate" class="form-control" />
-      </div>
-
-      <div class="form-group">
-        <label>Статус</label>
-        <select v-model="form.status" class="form-control">
-          <option value="pending">Ожидает</option>
-          <option value="in_progress">В работе</option>
-          <option value="completed">Выполнено</option>
-        </select>
+        <input type="date" v-model="form.end_date" class="form-control" />
       </div>
 
       <div class="form-group">
@@ -44,20 +35,18 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
-import { useSubsystemsStore } from '../stores/subsystemsStore'
+import { useMaintenanceStore } from '@/modules/maintenance/stores/maintenanceStore'
 
-const store = useSubsystemsStore()
+const store = useMaintenanceStore()
 const visible = ref(false)
 const isEdit = ref(false)
-const editId = ref<number | null>(null)
-const subsystemId = ref<number | null>(null)
+const editId = ref<string | null>(null)
 const error = ref('')
 
 const form = reactive({
   name: '',
-  startDate: '',
-  endDate: '',
-  status: 'pending' as 'pending' | 'in_progress' | 'completed',
+  start_date: '',
+  end_date: '',
   description: '',
 })
 
@@ -70,27 +59,24 @@ function getCurrentDate(): string {
 }
 
 function reset() {
+  const today = getCurrentDate()
   form.name = ''
-  form.startDate = getCurrentDate()
-  form.endDate = getCurrentDate()
-  form.status = 'pending'
+  form.start_date = today
+  form.end_date = today
   form.description = ''
   error.value = ''
   isEdit.value = false
   editId.value = null
-  subsystemId.value = null
 }
 
-function open(sId: number, plan?: any) {
+function open(plan?: any) {
   reset()
-  subsystemId.value = sId
   if (plan) {
     isEdit.value = true
-    editId.value = plan.id
+    editId.value = plan.plan_id
     form.name = plan.name
-    form.startDate = plan.startDate
-    form.endDate = plan.endDate
-    form.status = plan.status
+    form.start_date = plan.start_date
+    form.end_date = plan.end_date || ''
     form.description = plan.description || ''
   }
   visible.value = true
@@ -105,11 +91,11 @@ function validate(): boolean {
     error.value = 'Введите название'
     return false
   }
-  if (!form.startDate) {
+  if (!form.start_date) {
     error.value = 'Укажите дату начала'
     return false
   }
-  if (!form.endDate) {
+  if (!form.end_date) {
     error.value = 'Укажите дату окончания'
     return false
   }
@@ -117,25 +103,27 @@ function validate(): boolean {
   return true
 }
 
-function save() {
-  if (!validate() || !subsystemId.value) return
+async function save() {
+  if (!validate()) return
 
   const data = {
-    subsystemId: subsystemId.value,
     name: form.name,
-    startDate: form.startDate,
-    endDate: form.endDate,
-    status: form.status,
+    start_date: form.start_date,
+    end_date: form.end_date,
     description: form.description,
   }
 
-  if (isEdit.value && editId.value) {
-    store.updatePlan(editId.value, data)
-  } else {
-    store.addPlan(data)
+  try {
+    if (isEdit.value && editId.value) {
+      await store.updatePlan(editId.value, data)
+    } else {
+      await store.createPlan(data)
+    }
+    close()
+    window.dispatchEvent(new Event('plan-saved'))
+  } catch (err: any) {
+    error.value = err.message || 'Ошибка сохранения плана'
   }
-  close()
-  window.dispatchEvent(new Event('plan-saved'))
 }
 
 defineExpose({ open })
